@@ -1,15 +1,22 @@
 # therapy_sessions_app
-Therapy sessions Notes keeping for Therapist (Local Only)
-1. Product Overview
-Product Name
-Therapy Session Manager
-Product Vision
-A secure, locally-hosted desktop application for therapists to efficiently organize, track, and report on
-client session notes, assessments, and supervision activities.
-Target User
-Licensed therapists and mental health professionals who need to maintain detailed client records and
-track their professional activities.
-Problem Statement
-Therapists need a secure, privacy-focused solution to organize client session notes, track time spent
-with clients, monitor payment status, and generate reports for professional and billing purposes.
-Current solutions often require cloud storage, raising privacy concerns for sensitive client data.
+This is a local-only, privacy-focused macOS desktop app to manage therapy session notes, client records, assessments, and supervision logs.
+
+## Features
+- Local SQLite database (no cloud dependencies)
+- Clean 3-pane interface (macOS Notes-style)
+- Client CRUD with archive/unarchive
+- Rich text editor for session, assessment, and supervision notes
+- Auto-save with visual indicators
+- Tag sessions as PAID/UNPAID
+- PDF export for reports and individual clients
+- Runs in browser, packaged for macOS (Phase 2)
+
+## Requirements
+- Python 3.9+
+- macOS 11.0+
+
+## Setup Instructions
+See `README.txt` for non-developer setup steps.
+
+## License
+MIT
