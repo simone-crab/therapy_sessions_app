@@ -1,22 +1,21 @@
 # therapy_sessions_app
-This is a local-only, privacy-focused macOS desktop app to manage therapy session notes, client records, assessments, and supervision logs.
 
-## Features
-- Local SQLite database (no cloud dependencies)
-- Clean 3-pane interface (macOS Notes-style)
-- Client CRUD with archive/unarchive
-- Rich text editor for session, assessment, and supervision notes
-- Auto-save with visual indicators
-- Tag sessions as PAID/UNPAID
-- PDF export for reports and individual clients
-- Runs in browser, packaged for macOS (Phase 2)
+A local-only, privacy-first app for therapists to manage session notes, assessments, and supervision records.
 
-## Requirements
-- Python 3.9+
-- macOS 11.0+
+## ✅ Features
+- 3-pane macOS Notes-style UI
+- Local SQLite DB (no cloud storage)
+- Session / Assessment / Supervision notes
+- Rich text editor with Quill.js
+- Auto-save and payment tracking
+- Client archiving
+- PDF reports (in Phase 2)
 
-## Setup Instructions
-See `README.txt` for non-developer setup steps.
+## 🚀 Getting Started
 
-## License
-MIT
+### 1. Set up the environment
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
