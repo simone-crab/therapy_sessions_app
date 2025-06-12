@@ -23,3 +23,4 @@ app.include_router(session_notes.router, prefix="/api/sessions", tags=["Session 
 app.include_router(assessment_notes.router, prefix="/api/assessments", tags=["Assessment Notes"])
 app.include_router(supervision_notes.router, prefix="/api/supervisions", tags=["Supervision Notes"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+
