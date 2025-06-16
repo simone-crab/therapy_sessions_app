@@ -28,3 +28,7 @@ def delete_supervision(note_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Supervision note not found")
     return {"message": "Supervision note deleted"}
+
+@router.get("/client/{client_id}", response_model=List[SupervisionNoteResponse])
+def get_supervision_notes_for_client(client_id: int, db: Session = Depends(get_db)):
+    return SupervisionNoteService.get_supervision_notes_for_client(db, client_id)

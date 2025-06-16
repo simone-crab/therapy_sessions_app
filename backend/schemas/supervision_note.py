@@ -3,15 +3,13 @@ from typing import Optional
 from datetime import date, datetime
 
 class SupervisionNoteBase(BaseModel):
+    client_id: int
     supervision_date: date
     content: Optional[str] = None
+    duration_minutes: Optional[int] = None
 
 class SupervisionNoteCreate(SupervisionNoteBase):
     pass
-
-class SupervisionNoteUpdate(SupervisionNoteBase):
-    supervision_date: Optional[date] = None
-    content: Optional[str] = None
 
 class SupervisionNoteResponse(SupervisionNoteBase):
     id: int
@@ -20,3 +18,9 @@ class SupervisionNoteResponse(SupervisionNoteBase):
 
     class Config:
         from_attributes = True
+        
+class SupervisionNoteUpdate(BaseModel):
+    supervision_date: Optional[date] = None
+    content: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    client_id: Optional[int] = None

@@ -35,3 +35,7 @@ class SupervisionNoteService:
             db.commit()
             return True
         return False
+
+    @staticmethod
+    def get_supervision_notes_for_client(db: Session, client_id: int) -> List[SupervisionNote]:
+        return db.query(SupervisionNote).filter(SupervisionNote.client_id == client_id).order_by(SupervisionNote.supervision_date.desc()).all()

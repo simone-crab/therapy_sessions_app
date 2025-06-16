@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - Therapy Session Manager</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/reports.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+    <div class="reports-container">
+        <header>
+            <h1>Reports</h1>
+            <nav>
+                <a href="/" class="nav-link">← Back to Sessions</a>
+            </nav>
+        </header>
+
+        <div class="report-controls">
+            <div class="date-range">
+                <label>Start Date:
+                    <input type="date" id="start-date">
+                </label>
+                <label>End Date:
+                    <input type="date" id="end-date">
+                </label>
+            </div>
+            <div class="report-actions">
+                <button id="generate-report" class="primary-button">Generate Report</button>
+                <button id="export-pdf" class="secondary-button" disabled>Export PDF</button>
+            </div>
+        </div>
+
+        <div class="report-content">
+            <div class="report-section">
+                <h2>Client Time Allocation</h2>
+                <div class="chart-container">
+                    <canvas id="client-time-chart"></canvas>
+                </div>
+                <div class="table-container">
+                    <table id="client-time-table">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Total Hours</th>
+                                <th>Sessions</th>
+                                <th>Paid</th>
+                                <th>Unpaid</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="report-section">
+                <h2>Supervision Time</h2>
+                <div class="chart-container">
+                    <canvas id="supervision-chart"></canvas>
+                </div>
+                <div class="table-container">
+                    <table id="supervision-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Content Preview</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/reports.js"></script>
+</body>
+</html> 

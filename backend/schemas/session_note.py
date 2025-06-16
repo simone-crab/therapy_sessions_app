@@ -7,6 +7,7 @@ class SessionNoteBase(BaseModel):
     duration_minutes: int
     is_paid: bool = False
     content: Optional[str] = None
+    session_type: str = "In-Person"
 
 class SessionNoteCreate(SessionNoteBase):
     client_id: int
@@ -16,6 +17,7 @@ class SessionNoteUpdate(SessionNoteBase):
     duration_minutes: Optional[int] = None
     is_paid: Optional[bool] = None
     content: Optional[str] = None
+    session_type: Optional[str] = None
 
 class SessionNoteResponse(SessionNoteBase):
     id: int
