@@ -11,11 +11,15 @@ from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
 
-# Ensure data directory exists
-os.makedirs("data", exist_ok=True)
+# Get the user's home directory
+HOME_DIR = os.path.expanduser("~")
+# Create app data directory in the user's Library/Application Support
+APP_DATA_DIR = os.path.join(HOME_DIR, "Library", "Application Support", "therapy-sessions-app")
+# Ensure the directory exists
+os.makedirs(APP_DATA_DIR, exist_ok=True)
 
 # Database URL
-DATABASE_URL = "sqlite:///./data/therapy.db"
+DATABASE_URL = f"sqlite:///{os.path.join(APP_DATA_DIR, 'therapy.db')}"
 
 def init_db():
     # Create engine
