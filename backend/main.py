@@ -10,15 +10,22 @@ from backend.api import clients, session_notes, assessment_notes, supervision_no
 app = FastAPI(title="Therapy Session Manager", version="1.0")
 
 # Create tables on startup
-create_tables()
+create_tables() # Re-enable for Alembic to recognize existing schema
 
 # Configure CORS
+# More restrictive origins - common for local development including frontend dev server
+allowed_origins = [
+    "http://localhost:8000", # Assuming backend might be served here directly
+    "http://127.0.0.1:8000",
+    "http://localhost:5173", # Common for Vite dev server
+    "http://127.0.0.1:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Determine if we're running in production (packaged) mode
