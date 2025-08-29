@@ -269,7 +269,7 @@ input[type="date"] {
 }
 
 .list li.selected, .list > div.selected {
-  background-color: rgba(255,255,255, .1);
+  background-color: #ffa726; /* Slightly darker orange background */
   font-weight: 600;
   color: var(--dark)
 }
@@ -372,16 +372,36 @@ button {
   background-color: var(--danger);  /* Red */
 }
 
-.note-session {
-  border-left-color: #8b5cf6; /* purple */
+.note-card {
+  background-color: #424242;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+  border: 1px solid transparent;
 }
 
 .note-assessment {
-  border-left-color: #10b981; /* green */
+  border-color: #4A90E2;
+}
+
+.note-session {
+  border-color: #2ECC71;
 }
 
 .note-supervision {
-  border-left-color: #3b82f6; /* blue */
+  border-color: #9B59B6;
+}
+
+.note-card:hover {
+  background-color: #484848;
+}
+
+.note-card.selected {
+  background-color: #ffa726;
+  color: #000;
 }
 
 #editor-pane {
@@ -404,16 +424,15 @@ button {
   color: var(--light);
   box-sizing: border-box;
   border-radius: var(--size-sm);  
-
   max-inline-size: 40rem;
   label{
     color: var(--light);
   }
 }
 
-
-
-
+#note-form[hidden] {
+  display: none !important;
+}
 
 #editor {
   height: 180px;

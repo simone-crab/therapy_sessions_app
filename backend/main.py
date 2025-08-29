@@ -27,9 +27,10 @@ is_production = getattr(sys, 'frozen', False)
 # Set up paths for static files and templates
 if is_production:
     # When running as a packaged application
-    base_path = os.path.dirname(sys.executable)
-    static_dir = os.path.join(base_path, '_internal', 'frontend', 'static')
-    templates_dir = os.path.join(base_path, '_internal', 'frontend', 'templates')
+    # PyInstaller sets sys._MEIPASS to the directory containing the data files
+    base_path = sys._MEIPASS
+    static_dir = os.path.join(base_path, 'frontend', 'static')
+    templates_dir = os.path.join(base_path, 'frontend', 'templates')
 else:
     # When running in development
     static_dir = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'static')

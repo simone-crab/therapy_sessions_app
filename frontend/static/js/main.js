@@ -109,6 +109,7 @@ async function fetchNotesForClient(clientId) {
   assessments.forEach(note => {
     const card = document.createElement("div");
     card.className = "note-card note-assessment";
+    card.dataset.noteId = note.id;
     card.textContent = `Assessment – ${note.assessment_date}`;
     card.addEventListener("click", () => loadNote("assessment", note));
     list.appendChild(card);
@@ -117,6 +118,7 @@ async function fetchNotesForClient(clientId) {
   sessions.forEach(note => {
     const card = document.createElement("div");
     card.className = "note-card note-session";
+    card.dataset.noteId = note.id;
     
     // Create a container for the session info
     const sessionInfo = document.createElement("div");
@@ -145,18 +147,35 @@ async function fetchNotesForClient(clientId) {
   supervisions.forEach(note => {
     const card = document.createElement("div");
     card.className = "note-card note-supervision";
+    card.dataset.noteId = note.id;
     card.textContent = `Supervision – ${note.supervision_date}`;
     card.addEventListener("click", () => loadNote("supervision", note));
     list.appendChild(card);
   });
 }
 
-function loadNote(type, note) {
+async function loadNote(type, note) {
+  // Remove selection from all notes
+  document.querySelectorAll('.note-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+
+  // Add selection to the clicked note
+  const selectedCard = document.querySelector(`.note-card[data-note-id="${note.id}"]`);
+  if (selectedCard) {
+    selectedCard.classList.add('selected');
+  }
+
+  // Show the form
+  const form = document.getElementById("note-form");
+  form.hidden = false;
+
   currentNoteId = note.id;
   currentNoteType = type;
-  document.getElementById("note-form").hidden = false;
+  
   const dateField = type === "assessment" ? "assessment_date" :
-                    type === "supervision" ? "supervision_date" : "session_date";
+                   type === "supervision" ? "supervision_date" : "session_date";
+  
   document.getElementById("note-title").textContent = `${capitalize(type)} on ${note[dateField]}`;
   document.getElementById("note-date").value = note[dateField];
   document.getElementById("note-duration").value = note.duration_minutes || "";
@@ -496,4 +515,3 @@ async function loadNotes(clientId) {
     showError('Failed to load notes');
   }
 }
-
