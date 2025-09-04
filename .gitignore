@@ -1,13 +1,38 @@
-# Python
+# === Python ===
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 *.db
-
-# macOS
-.DS_Store
+*.sqlite3
 
 # Virtual environments
+.venv/
 venv/
-.env/
+.env
+
+# === macOS system files ===
+.DS_Store
+
+# === VS Code or JetBrains IDEs ===
+.vscode/
+.idea/
+*.code-workspace
+
+# === Node/Electron ===
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+electron-builder.yaml
+*.tsbuildinfo
+
+# === Backup or temp files ===
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
