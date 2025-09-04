@@ -1,0 +1,27 @@
+{
+  "name": "therapy-app",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "Therapy Session Manager",
+  "author": "Simone C.",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^36.5.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.simone.therapysessionmanager",
+    "productName": "Therapy Session Manager",
+    "mac": {
+      "target": "dmg"
+    },
+    "files": [
+  "therapy-backend",
+  "**/*"
+]
+  }
+}
