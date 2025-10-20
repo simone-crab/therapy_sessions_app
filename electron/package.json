@@ -20,8 +20,14 @@
       "target": "dmg"
     },
     "files": [
-  "therapy-backend",
-  "**/*"
-]
+      "therapy-backend",
+      "**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "therapy-backend",
+        "to": "therapy-backend"
+      }
+    ]
   }
 }

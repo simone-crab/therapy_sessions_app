@@ -34,7 +34,7 @@ electron-builder.yaml
 electron/dist/
 electron/build/
 electron/node_modules/
-electron/therapy-backend/
+electron/therapy-backend
 *.dmg
 *.dmg.blockmap
 

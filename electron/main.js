@@ -9,12 +9,19 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false, // Don't show until ready
     webPreferences: {
       contextIsolation: true,
     },
   });
 
   win.loadURL('http://localhost:8000');
+  
+  // Show and focus the window when it's ready
+  win.once('ready-to-show', () => {
+    win.show();
+    win.focus();
+  });
 }
 
 function waitForBackendAndCreateWindow(retries = 20) {
@@ -42,11 +49,19 @@ function waitForBackendAndCreateWindow(retries = 20) {
 app.whenReady().then(() => {
   const isDev = !app.isPackaged;
 
+  // In dev, we use the binary from project dist. In production, the binary is in extraResources.
   const backendPath = isDev
-    ? path.join(__dirname, '../dist/therapy-backend')
-    : path.join(process.resourcesPath, 'app', 'therapy-backend');
+    ? path.join(__dirname, '..', 'dist', 'therapy-backend')
+    : path.join(process.resourcesPath, 'therapy-backend');
 
-  backendProcess = spawn(backendPath);
+  console.log(`[electron] isDev=${isDev}`);
+  console.log(`[electron] resolved backendPath=${backendPath}`);
+
+  backendProcess = spawn(backendPath, [], { stdio: 'pipe' });
+
+  backendProcess.on('error', (err) => {
+    console.error(`[backend spawn error] ${err?.message || err}`);
+  });
 
   backendProcess.stdout.on('data', data => {
     console.log(`[backend] ${data}`);
