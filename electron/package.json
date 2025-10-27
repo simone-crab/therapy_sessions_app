@@ -17,7 +17,15 @@
     "appId": "com.simone.therapysessionmanager",
     "productName": "Therapy Session Manager",
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "category": "public.app-category.medical",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "LSMinimumSystemVersion": "15.0"
+      }
     },
     "files": [
       "therapy-backend",
