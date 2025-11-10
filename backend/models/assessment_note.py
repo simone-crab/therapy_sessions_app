@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, Text, ForeignKey
+from sqlalchemy import Column, Integer, Date, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -7,6 +7,8 @@ class AssessmentNote(BaseModel):
 
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     assessment_date = Column(Date, nullable=False)
+    duration_minutes = Column(Integer, nullable=False)
+    is_paid = Column(Boolean, default=False)
     content = Column(Text)
 
     client = relationship("Client", back_populates="assessment_notes")

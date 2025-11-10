@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu, MenuItem } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -12,10 +12,62 @@ function createWindow() {
     show: false, // Don't show until ready
     webPreferences: {
       contextIsolation: true,
+      spellcheck: true, // Enable spell checking
     },
   });
 
   win.loadURL('http://localhost:8000');
+  
+  // Set up context menu with spell-check suggestions
+  win.webContents.on('context-menu', (event, params) => {
+    const menu = new Menu();
+    
+    // Add spelling suggestions if word is misspelled
+    if (params.misspelledWord && params.dictionarySuggestions && params.dictionarySuggestions.length > 0) {
+      params.dictionarySuggestions.forEach((suggestion) => {
+        menu.append(new MenuItem({
+          label: suggestion,
+          click: () => {
+            win.webContents.replaceMisspelling(suggestion);
+          }
+        }));
+      });
+      
+      menu.append(new MenuItem({ type: 'separator' }));
+    }
+    
+    // Add standard editing options
+    if (params.editFlags.canCut) {
+      menu.append(new MenuItem({
+        label: 'Cut',
+        role: 'cut'
+      }));
+    }
+    
+    if (params.editFlags.canCopy) {
+      menu.append(new MenuItem({
+        label: 'Copy',
+        role: 'copy'
+      }));
+    }
+    
+    if (params.editFlags.canPaste) {
+      menu.append(new MenuItem({
+        label: 'Paste',
+        role: 'paste'
+      }));
+    }
+    
+    if (params.editFlags.canSelectAll) {
+      menu.append(new MenuItem({
+        label: 'Select All',
+        role: 'selectAll'
+      }));
+    }
+    
+    // Show the context menu
+    menu.popup();
+  });
   
   // Show and focus the window when it's ready
   win.once('ready-to-show', () => {

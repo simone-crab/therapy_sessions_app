@@ -281,6 +281,7 @@ input[type="date"] {
   padding: var(--size-sm);
   border: .1rem solid rgba(255, 255, 255, .3);
   border-radius: var(--size-xxsm);
+  font-size: 70%;
 }
 
 button {
@@ -434,13 +435,37 @@ button {
   display: none !important;
 }
 
+.editor-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 #editor {
   height: 180px;
+  min-height: 180px;
+  max-height: 800px;
+  resize: vertical;
+  overflow: auto;
 
   border-bottom-left-radius: var(--size-xxxsm);
   border-bottom-right-radius: var(--size-xxxsm);
     border: 1px solid rgba(255, 255, 255, .08);
   background-color: rgba(255, 255, 255, .08);
+}
+
+/* Style the resize handle in the lower right corner */
+#editor::-webkit-resizer {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-top: 2px solid rgba(255, 255, 255, 0.5);
+  border-left: 2px solid rgba(255, 255, 255, 0.5);
+  cursor: ns-resize;
+  background-image: 
+    linear-gradient(135deg, transparent 0%, transparent 40%, rgba(255, 255, 255, 0.6) 40%, rgba(255, 255, 255, 0.6) 60%, transparent 60%),
+    linear-gradient(135deg, transparent 0%, transparent 50%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.6) 70%, transparent 70%);
+  background-size: 12px 12px;
+  background-position: bottom right;
+  background-repeat: no-repeat;
 }
 
 #editor-toolbar {

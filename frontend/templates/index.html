@@ -32,7 +32,9 @@
       <!-- 🔢 Totals Summary -->
 <div id="totals-summary" class="sticky-summary">
   <div><strong>Session Time:</strong> <span id="session-total">0h 0m</span></div>
+  <div><strong>Sessions:</strong> <span id="session-count">0</span></div>
   <div><strong>Supervision Time:</strong> <span id="supervision-total">0h 0m</span></div>
+  <div><strong>Supervisions:</strong> <span id="supervision-count">0</span></div>
 </div>
 
     </aside>
@@ -47,7 +49,9 @@
       <!-- Client-specific totals summary -->
       <div id="client-totals-summary" class="sticky-summary " style="display: none;">
         <div><strong>Client Session Time:</strong> <span id="client-session-total">0h 0m</span></div>
+        <div><strong>Sessions:</strong> <span id="client-session-count">0</span></div>
         <div><strong>Client Supervision Time:</strong> <span id="client-supervision-total">0h 0m</span></div>
+        <div><strong>Supervisions:</strong> <span id="client-supervision-count">0</span></div>
       </div>
     </section>
 
@@ -91,7 +95,7 @@
 
       </div>
     </div>
-        <div >
+        <div class="editor-container">
         <div id="editor-toolbar">
           <span class="ql-formats">
             <button class="ql-bold"></button>
@@ -102,7 +106,7 @@
             <button class="ql-list" value="bullet"></button>
           </span>
         </div>
-        <div id="editor"></div>
+        <div id="editor" spellcheck="true"></div>
       </div>
       <div class>
         <button type="submit" class="primary-button">Save</button>

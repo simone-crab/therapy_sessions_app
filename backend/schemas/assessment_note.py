@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 class AssessmentNoteBase(BaseModel):
     assessment_date: date
+    duration_minutes: int
+    is_paid: bool = False
     content: Optional[str] = None
 
 class AssessmentNoteCreate(AssessmentNoteBase):
@@ -11,6 +13,8 @@ class AssessmentNoteCreate(AssessmentNoteBase):
 
 class AssessmentNoteUpdate(AssessmentNoteBase):
     assessment_date: Optional[date] = None
+    duration_minutes: Optional[int] = None
+    is_paid: Optional[bool] = None
     content: Optional[str] = None
 
 class AssessmentNoteResponse(AssessmentNoteBase):

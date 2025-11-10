@@ -15,6 +15,15 @@ window.addEventListener("load", () => {
     theme: "snow",
     modules: { toolbar: "#editor-toolbar" }
   });
+  
+  // Enable spellcheck on Quill's contenteditable element
+  // Use setTimeout to ensure Quill has fully initialized
+  setTimeout(() => {
+    const editorElement = document.querySelector('#editor .ql-editor');
+    if (editorElement) {
+      editorElement.setAttribute('spellcheck', 'true');
+    }
+  }, 100);
 
   fetchClients();
   updateGlobalTimeTotals(); // Initial load of totals
@@ -79,10 +88,53 @@ function renderClientList(clients) {
   });
 }
 
+function clearEditorPane() {
+  // Hide the form
+  const form = document.getElementById("note-form");
+  form.hidden = true;
+  
+  // Reset note title
+  document.getElementById("note-title").textContent = "Select a note";
+  
+  // Clear Quill editor content
+  if (quill) {
+    quill.setText("");
+  }
+  
+  // Reset form fields
+  document.getElementById("note-date").value = "";
+  document.getElementById("note-duration").value = "";
+  document.getElementById("note-paid").checked = false;
+  
+  // Reset session type radio buttons
+  const radioButtons = document.getElementsByName("note-session-type");
+  for (let radio of radioButtons) {
+    if (radio.value === "In-Person") {
+      radio.checked = true;
+    } else {
+      radio.checked = false;
+    }
+  }
+  
+  // Reset note tracking variables
+  currentNoteId = null;
+  currentNoteType = "session";
+  
+  // Clear any selected note cards
+  document.querySelectorAll('.note-card').forEach(card => {
+    card.classList.remove('selected');
+  });
+}
+
 function selectClient(id, name) {
   currentClientId = id;
   document.getElementById("client-name-header").textContent = name;
   document.getElementById("add-note").disabled = false;
+  
+  // Clear the editor pane when selecting a new client
+  clearEditorPane();
+  
+  // Load notes for the new client
   loadNotes(id);
 
   document.querySelectorAll("#client-list li").forEach(el => el.classList.remove("selected"));
@@ -110,7 +162,19 @@ async function fetchNotesForClient(clientId) {
     const card = document.createElement("div");
     card.className = "note-card note-assessment";
     card.dataset.noteId = note.id;
-    card.textContent = `Assessment – ${note.assessment_date}`;
+    
+    // Create a container for the assessment info
+    const assessmentInfo = document.createElement("div");
+    assessmentInfo.className = "session-info";
+    assessmentInfo.textContent = formatNoteLabel("assessment", note.assessment_date, note.duration_minutes);
+    
+    // Create the payment status indicator
+    const paymentIndicator = document.createElement("div");
+    paymentIndicator.className = `payment-indicator ${note.is_paid ? 'paid' : 'unpaid'}`;
+    paymentIndicator.title = note.is_paid ? 'Paid' : 'Unpaid';
+    
+    card.appendChild(assessmentInfo);
+    card.appendChild(paymentIndicator);
     card.addEventListener("click", () => loadNote("assessment", note));
     list.appendChild(card);
   });
@@ -123,9 +187,9 @@ async function fetchNotesForClient(clientId) {
     // Create a container for the session info
     const sessionInfo = document.createElement("div");
     sessionInfo.className = "session-info";
-    sessionInfo.textContent = `${note.session_date} (${note.duration_minutes} min)`;
+    sessionInfo.textContent = formatNoteLabel("session", note.session_date, note.duration_minutes);
 
-    // Create the session type badge
+    // Create the session type badge (In-Person/Online)
     const typeBadge = document.createElement("span");
     typeBadge.className = `session-type-badge ${note.session_type ? note.session_type.toLowerCase().replace(/ /g, '-') : 'in-person'}`;
     typeBadge.textContent = note.session_type || "In-Person";
@@ -148,7 +212,13 @@ async function fetchNotesForClient(clientId) {
     const card = document.createElement("div");
     card.className = "note-card note-supervision";
     card.dataset.noteId = note.id;
-    card.textContent = `Supervision – ${note.supervision_date}`;
+    
+    // Create a container for the supervision info
+    const supervisionInfo = document.createElement("div");
+    supervisionInfo.className = "session-info";
+    supervisionInfo.textContent = formatNoteLabel("supervision", note.supervision_date, note.duration_minutes);
+    
+    card.appendChild(supervisionInfo);
     card.addEventListener("click", () => loadNote("supervision", note));
     list.appendChild(card);
   });
@@ -189,6 +259,11 @@ async function loadNote(type, note) {
       }
     }
   }
+  // Show/hide session type radio buttons based on note type
+  const sessionTypeContainer = document.querySelector('.form-grid:has([name="note-session-type"])');
+  if (sessionTypeContainer) {
+    sessionTypeContainer.style.display = type === "session" ? "block" : "none";
+  }
   quill.setText(note.content || "");
 }
 
@@ -213,8 +288,8 @@ async function submitNoteUpdate(e) {
   if (duration) {
     payload.duration_minutes = parseInt(duration);
   }
+  payload.is_paid = document.getElementById("note-paid").checked;
   if (currentNoteType === "session") {
-    payload.is_paid = document.getElementById("note-paid").checked;
     const selectedRadio = document.querySelector('input[name="note-session-type"]:checked');
     payload.session_type = selectedRadio ? selectedRadio.value : "In-Person";
   }  
@@ -231,8 +306,25 @@ async function submitNoteUpdate(e) {
   if (res.status === 200) {
     document.getElementById("save-status").textContent = "Saved";
     setTimeout(() => document.getElementById("save-status").textContent = "", 2000);
+    
+    // Store the current note ID to re-select it after reload
+    const noteIdToReselect = currentNoteId;
+    
     await loadNotes(currentClientId);
     await updateGlobalTimeTotals();
+    
+    // Re-select the note that was being edited
+    if (noteIdToReselect) {
+      const cardToReselect = document.querySelector(`.note-card[data-note-id="${noteIdToReselect}"]`);
+      if (cardToReselect) {
+        // Remove selection from all cards
+        document.querySelectorAll('.note-card').forEach(card => {
+          card.classList.remove('selected');
+        });
+        // Re-add selection to the saved note
+        cardToReselect.classList.add('selected');
+      }
+    }
   }  
 }
 
@@ -257,7 +349,9 @@ async function createNewNote(type) {
     }),
     ...(type === "assessment" && {
       client_id: currentClientId,
-      assessment_date: today
+      assessment_date: today,
+      duration_minutes: 50,
+      is_paid: false
     }),
     ...(type === "supervision" && {
       client_id: currentClientId,
@@ -383,6 +477,21 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function formatDate(dateString) {
+  // Convert YYYY-MM-DD to DD/MM/YYYY
+  if (!dateString) return "";
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function formatNoteLabel(type, date, duration) {
+  // Format: "Session Type - DD/MM/YYYY - (X min)"
+  const typeLabel = capitalize(type);
+  const formattedDate = formatDate(date);
+  const durationText = duration !== null && duration !== undefined ? `${duration} min` : "0 min";
+  return `${typeLabel} - ${formattedDate} - (${durationText})`;
+}
+
 function formatTime(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -391,8 +500,9 @@ function formatTime(minutes) {
 
 async function updateGlobalTimeTotals() {
   try {
-    // Always use 'all' filter for global totals to include all sessions
-    const res = await fetch(`/api/reports/totals?filter=all`);
+    // Use the current filter selection
+    const currentFilter = document.getElementById("client-filter")?.value || "all";
+    const res = await fetch(`/api/reports/totals?filter=${currentFilter}`);
     if (!res.ok) {
       throw new Error(`Failed to fetch totals: ${res.statusText}`);
     }
@@ -401,12 +511,16 @@ async function updateGlobalTimeTotals() {
     
     // Update the totals with proper formatting
     document.getElementById("session-total").textContent = formatTime(data.total_session_minutes || 0);
+    document.getElementById("session-count").textContent = data.total_session_count || 0;
     document.getElementById("supervision-total").textContent = formatTime(data.total_supervision_minutes || 0);
+    document.getElementById("supervision-count").textContent = data.total_supervision_count || 0;
   } catch (err) {
     console.error("Error loading time totals:", err);
     // Show error state in the UI
     document.getElementById("session-total").textContent = "Error";
+    document.getElementById("session-count").textContent = "Error";
     document.getElementById("supervision-total").textContent = "Error";
+    document.getElementById("supervision-count").textContent = "Error";
   }
 }
 
@@ -484,21 +598,30 @@ async function fetchClientTotals(clientId) {
     return data;
   } catch (error) {
     console.error('Error fetching client totals:', error);
-    return { session_total: 0, supervision_total: 0 };
+    return { 
+      session_total: 0, 
+      supervision_total: 0,
+      session_count: 0,
+      supervision_count: 0
+    };
   }
 }
 
 function updateClientTotalsDisplay(totals) {
   const summaryDiv = document.getElementById('client-totals-summary');
   const sessionTotal = document.getElementById('client-session-total');
+  const sessionCount = document.getElementById('client-session-count');
   const supervisionTotal = document.getElementById('client-supervision-total');
+  const supervisionCount = document.getElementById('client-supervision-count');
 
   if (totals.session_total === 0 && totals.supervision_total === 0) {
     summaryDiv.style.display = 'none';
   } else {
     summaryDiv.style.display = 'block';
     sessionTotal.textContent = formatTime(totals.session_total);
+    sessionCount.textContent = totals.session_count || 0;
     supervisionTotal.textContent = formatTime(totals.supervision_total);
+    supervisionCount.textContent = totals.supervision_count || 0;
   }
 }
 
