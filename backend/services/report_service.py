@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, case
+from sqlalchemy import func, and_, case, extract
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
@@ -124,22 +124,243 @@ class ReportService:
         try:
             logger.info(f"Querying supervision time report from {start_date} to {end_date}")
             
+            # Aggregate supervision notes by month with total duration
+            monthly_data = db.query(
+                extract('year', SupervisionNote.supervision_date).label('year'),
+                extract('month', SupervisionNote.supervision_date).label('month'),
+                func.sum(SupervisionNote.duration_minutes).label('total_minutes'),
+                func.count(SupervisionNote.id).label('session_count')
+            ).filter(and_(
+                SupervisionNote.supervision_date >= start_date,
+                SupervisionNote.supervision_date <= end_date
+            )).group_by(
+                extract('year', SupervisionNote.supervision_date),
+                extract('month', SupervisionNote.supervision_date)
+            ).all()
+            
+            # Create a dictionary of month -> data
+            monthly_dict = {}
+            for row in monthly_data:
+                month_key = f"{int(row.year)}-{int(row.month):02d}"
+                monthly_dict[month_key] = {
+                    "year": int(row.year),
+                    "month": int(row.month),
+                    "total_hours": (row.total_minutes or 0) / 60.0,
+                    "session_count": row.session_count or 0
+                }
+            
+            # Generate all months in the date range
+            all_months = []
+            current = start_date.replace(day=1)
+            end_month = end_date.replace(day=1)
+            
+            while current <= end_month:
+                month_key = f"{current.year}-{current.month:02d}"
+                month_name = current.strftime("%B %Y")
+                
+                if month_key in monthly_dict:
+                    all_months.append({
+                        "month_key": month_key,
+                        "month_name": month_name,
+                        "total_hours": monthly_dict[month_key]["total_hours"],
+                        "session_count": monthly_dict[month_key]["session_count"]
+                    })
+                else:
+                    all_months.append({
+                        "month_key": month_key,
+                        "month_name": month_name,
+                        "total_hours": 0.0,
+                        "session_count": 0
+                    })
+                
+                # Move to next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            # Get all supervision notes for the table
             supervision_notes = db.query(SupervisionNote)\
                                 .filter(and_(
                                     SupervisionNote.supervision_date >= start_date,
                                     SupervisionNote.supervision_date <= end_date
                                 )).all()
             
-            logger.info(f"Found {len(supervision_notes)} supervision notes in the date range")
+            total_minutes = sum(n.duration_minutes for n in supervision_notes)
+            
+            logger.info(f"Found {len(supervision_notes)} supervision notes in the date range, {len(all_months)} months")
             
             return {
                 "total_sessions": len(supervision_notes),
-                "total_days": len({n.supervision_date for n in supervision_notes}),
+                "total_hours": total_minutes / 60.0,
+                "monthly_data": all_months,
                 "notes": [
-                    {"id": n.id, "date": n.supervision_date, "content_preview": n.content[:100] + "..." if n.content else ""}
+                    {
+                        "id": n.id,
+                        "date": n.supervision_date,
+                        "content_preview": n.content[:100] + "..." if n.content and len(n.content) > 100 else (n.content or ""),
+                        "content": n.content or ""
+                    }
                     for n in supervision_notes
                 ]
             }
         except Exception as e:
             logger.error(f"Error in get_supervision_time_report: {str(e)}", exc_info=True)
+            raise
+
+    @staticmethod
+    def get_session_notes_report(db: Session, start_date: date, end_date: date) -> Dict:
+        try:
+            logger.info(f"Querying session notes report from {start_date} to {end_date}")
+            
+            # Aggregate session notes by month with total duration
+            session_monthly_data = db.query(
+                extract('year', SessionNote.session_date).label('year'),
+                extract('month', SessionNote.session_date).label('month'),
+                func.sum(SessionNote.duration_minutes).label('total_minutes'),
+                func.count(SessionNote.id).label('session_count')
+            ).filter(and_(
+                SessionNote.session_date >= start_date,
+                SessionNote.session_date <= end_date
+            )).group_by(
+                extract('year', SessionNote.session_date),
+                extract('month', SessionNote.session_date)
+            ).all()
+            
+            # Aggregate assessment notes by month with total duration
+            assessment_monthly_data = db.query(
+                extract('year', AssessmentNote.assessment_date).label('year'),
+                extract('month', AssessmentNote.assessment_date).label('month'),
+                func.sum(AssessmentNote.duration_minutes).label('total_minutes'),
+                func.count(AssessmentNote.id).label('session_count')
+            ).filter(and_(
+                AssessmentNote.assessment_date >= start_date,
+                AssessmentNote.assessment_date <= end_date
+            )).group_by(
+                extract('year', AssessmentNote.assessment_date),
+                extract('month', AssessmentNote.assessment_date)
+            ).all()
+            
+            # Combine monthly data
+            monthly_dict = {}
+            
+            # Add session notes
+            for row in session_monthly_data:
+                month_key = f"{int(row.year)}-{int(row.month):02d}"
+                if month_key not in monthly_dict:
+                    monthly_dict[month_key] = {
+                        "year": int(row.year),
+                        "month": int(row.month),
+                        "session_minutes": 0,
+                        "assessment_minutes": 0,
+                        "session_count": 0,
+                        "assessment_count": 0
+                    }
+                monthly_dict[month_key]["session_minutes"] = row.total_minutes or 0
+                monthly_dict[month_key]["session_count"] = row.session_count or 0
+            
+            # Add assessment notes
+            for row in assessment_monthly_data:
+                month_key = f"{int(row.year)}-{int(row.month):02d}"
+                if month_key not in monthly_dict:
+                    monthly_dict[month_key] = {
+                        "year": int(row.year),
+                        "month": int(row.month),
+                        "session_minutes": 0,
+                        "assessment_minutes": 0,
+                        "session_count": 0,
+                        "assessment_count": 0
+                    }
+                monthly_dict[month_key]["assessment_minutes"] = row.total_minutes or 0
+                monthly_dict[month_key]["assessment_count"] = row.session_count or 0
+            
+            # Generate all months in the date range
+            all_months = []
+            current = start_date.replace(day=1)
+            end_month = end_date.replace(day=1)
+            
+            while current <= end_month:
+                month_key = f"{current.year}-{current.month:02d}"
+                month_name = current.strftime("%B %Y")
+                
+                if month_key in monthly_dict:
+                    data = monthly_dict[month_key]
+                    all_months.append({
+                        "month_key": month_key,
+                        "month_name": month_name,
+                        "session_hours": data["session_minutes"] / 60.0,
+                        "assessment_hours": data["assessment_minutes"] / 60.0,
+                        "total_hours": (data["session_minutes"] + data["assessment_minutes"]) / 60.0,
+                        "session_count": data["session_count"],
+                        "assessment_count": data["assessment_count"]
+                    })
+                else:
+                    all_months.append({
+                        "month_key": month_key,
+                        "month_name": month_name,
+                        "session_hours": 0.0,
+                        "assessment_hours": 0.0,
+                        "total_hours": 0.0,
+                        "session_count": 0,
+                        "assessment_count": 0
+                    })
+                
+                # Move to next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            # Get all session notes for the table
+            session_notes = db.query(SessionNote)\
+                            .filter(and_(
+                                SessionNote.session_date >= start_date,
+                                SessionNote.session_date <= end_date
+                            )).all()
+            
+            # Get all assessment notes for the table
+            assessment_notes = db.query(AssessmentNote)\
+                              .filter(and_(
+                                  AssessmentNote.assessment_date >= start_date,
+                                  AssessmentNote.assessment_date <= end_date
+                              )).all()
+            
+            # Combine and sort notes by date
+            all_notes = []
+            
+            # Add session notes
+            for note in session_notes:
+                all_notes.append({
+                    "id": note.id,
+                    "date": note.session_date,
+                    "type": "Session",
+                    "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
+                    "content": note.content or ""
+                })
+            
+            # Add assessment notes
+            for note in assessment_notes:
+                all_notes.append({
+                    "id": note.id,
+                    "date": note.assessment_date,
+                    "type": "Assessment",
+                    "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
+                    "content": note.content or ""
+                })
+            
+            # Sort by date
+            all_notes.sort(key=lambda x: x["date"])
+            
+            total_minutes = sum(n.duration_minutes for n in session_notes) + sum(n.duration_minutes for n in assessment_notes)
+            
+            logger.info(f"Found {len(session_notes)} session notes and {len(assessment_notes)} assessment notes, {len(all_months)} months")
+            
+            return {
+                "total_sessions": len(session_notes) + len(assessment_notes),
+                "total_hours": total_minutes / 60.0,
+                "monthly_data": all_months,
+                "notes": all_notes
+            }
+        except Exception as e:
+            logger.error(f"Error in get_session_notes_report: {str(e)}", exc_info=True)
             raise

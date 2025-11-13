@@ -36,6 +36,17 @@ def supervision_time_report(start_date: date, end_date: date, db: Session = Depe
         logger.error(f"Error generating supervision time report: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating supervision time report: {str(e)}")
 
+@router.get("/session-notes", response_model=Dict)
+def session_notes_report(start_date: date, end_date: date, db: Session = Depends(get_db)):
+    try:
+        logger.info(f"Generating session notes report for period {start_date} to {end_date}")
+        result = ReportService.get_session_notes_report(db, start_date, end_date)
+        logger.info(f"Successfully generated session notes report with {result['total_sessions']} notes")
+        return result
+    except Exception as e:
+        logger.error(f"Error generating session notes report: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating session notes report: {str(e)}")
+
 @router.get("/totals")
 def get_totals(filter: str = "active", db: Session = Depends(get_db)):
     try:
