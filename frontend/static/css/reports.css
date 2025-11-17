@@ -53,6 +53,15 @@ header h1 {
     border: 1px solid #d1d5db;
 }
 
+.date-range select {
+    color: #1f2937;
+    background-color: white;
+    border: 1px solid #d1d5db;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
 .report-actions {
     display: flex;
     gap: 1rem;

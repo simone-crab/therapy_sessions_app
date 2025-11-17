@@ -27,6 +27,11 @@
                 <label>End Date:
                     <input type="date" id="end-date">
                 </label>
+                <label>Client:
+                    <select id="client-filter">
+                        <option value="">All Clients</option>
+                    </select>
+                </label>
             </div>
             <div class="report-actions">
                 <button id="generate-report" class="primary-button">Generate Report</button>
@@ -85,6 +90,7 @@
                             <tr>
                                 <th>Date</th>
                                 <th>Type</th>
+                                <th>Client</th>
                                 <th>Content Preview</th>
                             </tr>
                         </thead>

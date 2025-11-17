@@ -4,7 +4,7 @@ from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
 from backend.models.client import Client
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import date
 import logging
 
@@ -13,19 +13,44 @@ logger = logging.getLogger(__name__)
 class ReportService:
 
     @staticmethod
-    def get_client_time_report(db: Session, start_date: date, end_date: date) -> List[Dict]:
+    def get_client_time_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> List[Dict]:
         try:
-            logger.info(f"Querying client time report from {start_date} to {end_date}")
+            logger.info(f"Querying client time report from {start_date} to {end_date}, client_id={client_id}")
             
-            # First check if we have any clients
-            client_count = db.query(Client).count()
-            logger.info(f"Found {client_count} total clients in database")
+            # If filtering by specific client, get that client first
+            if client_id:
+                client = db.query(Client).filter(Client.id == client_id).first()
+                if not client:
+                    return []
+                client_ids_to_process = [client_id]
+            else:
+                # First check if we have any clients
+                client_count = db.query(Client).count()
+                logger.info(f"Found {client_count} total clients in database")
+                
+                if client_count == 0:
+                    return []
+                client_ids_to_process = None  # Process all clients
+
+            # Build base query conditions
+            session_join_conditions = and_(
+                SessionNote.client_id == Client.id,
+                SessionNote.session_date >= start_date,
+                SessionNote.session_date <= end_date
+            )
+            assessment_join_conditions = and_(
+                AssessmentNote.client_id == Client.id,
+                AssessmentNote.assessment_date >= start_date,
+                AssessmentNote.assessment_date <= end_date
+            )
             
-            if client_count == 0:
-                return []
+            # Add client filter if specified
+            if client_id:
+                session_join_conditions = and_(session_join_conditions, Client.id == client_id)
+                assessment_join_conditions = and_(assessment_join_conditions, Client.id == client_id)
 
             # Get session notes aggregated by client
-            session_results = db.query(
+            session_query = db.query(
                 Client.id,
                 Client.first_name,
                 Client.last_name,
@@ -33,28 +58,26 @@ class ReportService:
                 func.coalesce(func.count(SessionNote.id), 0).label("session_count"),
                 func.coalesce(func.sum(case((SessionNote.is_paid == True, 1), else_=0)), 0).label("paid_sessions"),
                 func.coalesce(func.sum(case((SessionNote.is_paid == False, 1), else_=0)), 0).label("unpaid_sessions")
-            ).outerjoin(SessionNote, and_(
-                SessionNote.client_id == Client.id,
-                SessionNote.session_date >= start_date,
-                SessionNote.session_date <= end_date
-            ))\
-             .group_by(Client.id)\
-             .all()
+            ).outerjoin(SessionNote, session_join_conditions)
+            
+            if client_id:
+                session_query = session_query.filter(Client.id == client_id)
+            
+            session_results = session_query.group_by(Client.id).all()
             
             # Get assessment notes aggregated by client
-            assessment_results = db.query(
+            assessment_query = db.query(
                 Client.id,
                 func.coalesce(func.sum(AssessmentNote.duration_minutes), 0).label("total_minutes"),
                 func.coalesce(func.count(AssessmentNote.id), 0).label("session_count"),
                 func.coalesce(func.sum(case((AssessmentNote.is_paid == True, 1), else_=0)), 0).label("paid_sessions"),
                 func.coalesce(func.sum(case((AssessmentNote.is_paid == False, 1), else_=0)), 0).label("unpaid_sessions")
-            ).outerjoin(AssessmentNote, and_(
-                AssessmentNote.client_id == Client.id,
-                AssessmentNote.assessment_date >= start_date,
-                AssessmentNote.assessment_date <= end_date
-            ))\
-             .group_by(Client.id)\
-             .all()
+            ).outerjoin(AssessmentNote, assessment_join_conditions)
+            
+            if client_id:
+                assessment_query = assessment_query.filter(Client.id == client_id)
+            
+            assessment_results = assessment_query.group_by(Client.id).all()
             
             # Combine results by client
             session_dict = {r.id: r for r in session_results}
@@ -63,11 +86,26 @@ class ReportService:
             # Get all unique client IDs
             all_client_ids = set(session_dict.keys()) | set(assessment_dict.keys())
             
+            # If filtering by client and no results, still return the client with zeros
+            if client_id and len(all_client_ids) == 0:
+                client = db.query(Client).filter(Client.id == client_id).first()
+                if client:
+                    all_client_ids = {client_id}
+                    session_dict[client_id] = type('obj', (object,), {
+                        'id': client_id,
+                        'first_name': client.first_name,
+                        'last_name': client.last_name,
+                        'total_minutes': 0,
+                        'session_count': 0,
+                        'paid_sessions': 0,
+                        'unpaid_sessions': 0
+                    })()
+            
             # Build combined results
             results = []
-            for client_id in all_client_ids:
-                session = session_dict.get(client_id)
-                assessment = assessment_dict.get(client_id)
+            for client_id_item in all_client_ids:
+                session = session_dict.get(client_id_item)
+                assessment = assessment_dict.get(client_id_item)
                 
                 if session:
                     first_name = session.first_name
@@ -78,8 +116,8 @@ class ReportService:
                     unpaid_sessions = (session.unpaid_sessions or 0) + (assessment.unpaid_sessions if assessment else 0)
                 else:
                     # Only assessment notes for this client - need to get client info
-                    assessment = assessment_dict[client_id]
-                    client = db.query(Client).filter(Client.id == client_id).first()
+                    assessment = assessment_dict[client_id_item]
+                    client = db.query(Client).filter(Client.id == client_id_item).first()
                     if not client:
                         continue  # Skip if client doesn't exist
                     first_name = client.first_name
@@ -90,7 +128,7 @@ class ReportService:
                     unpaid_sessions = assessment.unpaid_sessions or 0
                 
                 results.append({
-                    'id': client_id,
+                    'id': client_id_item,
                     'first_name': first_name,
                     'last_name': last_name,
                     'total_minutes': total_minutes,
@@ -120,9 +158,17 @@ class ReportService:
             raise
 
     @staticmethod
-    def get_supervision_time_report(db: Session, start_date: date, end_date: date) -> Dict:
+    def get_supervision_time_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> Dict:
         try:
-            logger.info(f"Querying supervision time report from {start_date} to {end_date}")
+            logger.info(f"Querying supervision time report from {start_date} to {end_date}, client_id={client_id}")
+            
+            # Build filter conditions
+            filter_conditions = and_(
+                SupervisionNote.supervision_date >= start_date,
+                SupervisionNote.supervision_date <= end_date
+            )
+            if client_id:
+                filter_conditions = and_(filter_conditions, SupervisionNote.client_id == client_id)
             
             # Aggregate supervision notes by month with total duration
             monthly_data = db.query(
@@ -130,10 +176,7 @@ class ReportService:
                 extract('month', SupervisionNote.supervision_date).label('month'),
                 func.sum(SupervisionNote.duration_minutes).label('total_minutes'),
                 func.count(SupervisionNote.id).label('session_count')
-            ).filter(and_(
-                SupervisionNote.supervision_date >= start_date,
-                SupervisionNote.supervision_date <= end_date
-            )).group_by(
+            ).filter(filter_conditions).group_by(
                 extract('year', SupervisionNote.supervision_date),
                 extract('month', SupervisionNote.supervision_date)
             ).all()
@@ -180,11 +223,14 @@ class ReportService:
                     current = current.replace(month=current.month + 1)
             
             # Get all supervision notes for the table
-            supervision_notes = db.query(SupervisionNote)\
-                                .filter(and_(
-                                    SupervisionNote.supervision_date >= start_date,
-                                    SupervisionNote.supervision_date <= end_date
-                                )).all()
+            supervision_filter = and_(
+                SupervisionNote.supervision_date >= start_date,
+                SupervisionNote.supervision_date <= end_date
+            )
+            if client_id:
+                supervision_filter = and_(supervision_filter, SupervisionNote.client_id == client_id)
+            
+            supervision_notes = db.query(SupervisionNote).filter(supervision_filter).all()
             
             total_minutes = sum(n.duration_minutes for n in supervision_notes)
             
@@ -209,9 +255,22 @@ class ReportService:
             raise
 
     @staticmethod
-    def get_session_notes_report(db: Session, start_date: date, end_date: date) -> Dict:
+    def get_session_notes_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> Dict:
         try:
-            logger.info(f"Querying session notes report from {start_date} to {end_date}")
+            logger.info(f"Querying session notes report from {start_date} to {end_date}, client_id={client_id}")
+            
+            # Build filter conditions
+            session_filter = and_(
+                SessionNote.session_date >= start_date,
+                SessionNote.session_date <= end_date
+            )
+            assessment_filter = and_(
+                AssessmentNote.assessment_date >= start_date,
+                AssessmentNote.assessment_date <= end_date
+            )
+            if client_id:
+                session_filter = and_(session_filter, SessionNote.client_id == client_id)
+                assessment_filter = and_(assessment_filter, AssessmentNote.client_id == client_id)
             
             # Aggregate session notes by month with total duration
             session_monthly_data = db.query(
@@ -219,10 +278,7 @@ class ReportService:
                 extract('month', SessionNote.session_date).label('month'),
                 func.sum(SessionNote.duration_minutes).label('total_minutes'),
                 func.count(SessionNote.id).label('session_count')
-            ).filter(and_(
-                SessionNote.session_date >= start_date,
-                SessionNote.session_date <= end_date
-            )).group_by(
+            ).filter(session_filter).group_by(
                 extract('year', SessionNote.session_date),
                 extract('month', SessionNote.session_date)
             ).all()
@@ -233,10 +289,7 @@ class ReportService:
                 extract('month', AssessmentNote.assessment_date).label('month'),
                 func.sum(AssessmentNote.duration_minutes).label('total_minutes'),
                 func.count(AssessmentNote.id).label('session_count')
-            ).filter(and_(
-                AssessmentNote.assessment_date >= start_date,
-                AssessmentNote.assessment_date <= end_date
-            )).group_by(
+            ).filter(assessment_filter).group_by(
                 extract('year', AssessmentNote.assessment_date),
                 extract('month', AssessmentNote.assessment_date)
             ).all()
@@ -311,39 +364,35 @@ class ReportService:
                 else:
                     current = current.replace(month=current.month + 1)
             
-            # Get all session notes for the table
-            session_notes = db.query(SessionNote)\
-                            .filter(and_(
-                                SessionNote.session_date >= start_date,
-                                SessionNote.session_date <= end_date
-                            )).all()
+            # Get all session notes for the table with client information
+            session_notes = db.query(SessionNote, Client).join(Client, SessionNote.client_id == Client.id).filter(session_filter).all()
             
-            # Get all assessment notes for the table
-            assessment_notes = db.query(AssessmentNote)\
-                              .filter(and_(
-                                  AssessmentNote.assessment_date >= start_date,
-                                  AssessmentNote.assessment_date <= end_date
-                              )).all()
+            # Get all assessment notes for the table with client information
+            assessment_notes = db.query(AssessmentNote, Client).join(Client, AssessmentNote.client_id == Client.id).filter(assessment_filter).all()
             
             # Combine and sort notes by date
             all_notes = []
             
             # Add session notes
-            for note in session_notes:
+            for note, client in session_notes:
                 all_notes.append({
                     "id": note.id,
                     "date": note.session_date,
                     "type": "Session",
+                    "client_id": client.id,
+                    "client_name": f"{client.first_name} {client.last_name}",
                     "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
                     "content": note.content or ""
                 })
             
             # Add assessment notes
-            for note in assessment_notes:
+            for note, client in assessment_notes:
                 all_notes.append({
                     "id": note.id,
                     "date": note.assessment_date,
                     "type": "Assessment",
+                    "client_id": client.id,
+                    "client_name": f"{client.first_name} {client.last_name}",
                     "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
                     "content": note.content or ""
                 })
@@ -351,7 +400,8 @@ class ReportService:
             # Sort by date
             all_notes.sort(key=lambda x: x["date"])
             
-            total_minutes = sum(n.duration_minutes for n in session_notes) + sum(n.duration_minutes for n in assessment_notes)
+            # Calculate total minutes (note is now a tuple (note, client))
+            total_minutes = sum(note.duration_minutes for note, _ in session_notes) + sum(note.duration_minutes for note, _ in assessment_notes)
             
             logger.info(f"Found {len(session_notes)} session notes and {len(assessment_notes)} assessment notes, {len(all_months)} months")
             

@@ -5,7 +5,7 @@ let currentSupervisionData = null;
 let currentSessionNotesData = null;
 
 // Set default date range to last 30 days
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
@@ -13,22 +13,54 @@ window.addEventListener('load', () => {
     document.getElementById('start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
     document.getElementById('end-date').value = today.toISOString().split('T')[0];
 
+    // Load active clients for filter dropdown
+    await loadClients();
+
     document.getElementById('generate-report').addEventListener('click', generateReport);
     document.getElementById('export-pdf').addEventListener('click', exportToPDF);
 });
 
+async function loadClients() {
+    try {
+        const response = await fetch('/api/clients/?filter=active');
+        if (!response.ok) {
+            throw new Error(`Failed to fetch clients: ${response.status}`);
+        }
+        const clients = await response.json();
+        const clientFilter = document.getElementById('client-filter');
+        
+        // Clear existing options except "All Clients"
+        clientFilter.innerHTML = '<option value="">All Clients</option>';
+        
+        // Add active clients
+        clients.forEach(client => {
+            const option = document.createElement('option');
+            option.value = client.id;
+            option.textContent = `${client.first_name} ${client.last_name}`;
+            clientFilter.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading clients:', error);
+    }
+}
+
 async function generateReport() {
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
+    const clientId = document.getElementById('client-filter').value;
 
     if (!startDate || !endDate) {
         alert('Please select both start and end dates');
         return;
     }
 
+    // Build query parameters
+    const baseParams = `start_date=${startDate}&end_date=${endDate}`;
+    const clientParam = clientId ? `&client_id=${clientId}` : '';
+
     try {
         console.log('Fetching client time data...');
-        const clientTimeResponse = await fetch(`/api/reports/client-time?start_date=${startDate}&end_date=${endDate}`);
+        const clientTimeResponse = await fetch(`/api/reports/client-time?${baseParams}${clientParam}`);
         if (!clientTimeResponse.ok) {
             throw new Error(`Client time API error: ${clientTimeResponse.status} ${clientTimeResponse.statusText}`);
         }
@@ -36,7 +68,7 @@ async function generateReport() {
         console.log('Client time data:', clientTimeData);
 
         console.log('Fetching supervision data...');
-        const supervisionResponse = await fetch(`/api/reports/supervision-time?start_date=${startDate}&end_date=${endDate}`);
+        const supervisionResponse = await fetch(`/api/reports/supervision-time?${baseParams}${clientParam}`);
         if (!supervisionResponse.ok) {
             throw new Error(`Supervision time API error: ${supervisionResponse.status} ${supervisionResponse.statusText}`);
         }
@@ -44,7 +76,7 @@ async function generateReport() {
         console.log('Supervision data:', supervisionData);
 
         console.log('Fetching session notes data...');
-        const sessionNotesResponse = await fetch(`/api/reports/session-notes?start_date=${startDate}&end_date=${endDate}`);
+        const sessionNotesResponse = await fetch(`/api/reports/session-notes?${baseParams}${clientParam}`);
         if (!sessionNotesResponse.ok) {
             throw new Error(`Session notes API error: ${sessionNotesResponse.status} ${sessionNotesResponse.statusText}`);
         }
@@ -235,6 +267,7 @@ function updateSessionNotesTable(data) {
         row.innerHTML = `
             <td>${new Date(note.date).toLocaleDateString()}</td>
             <td>${note.type}</td>
+            <td>${note.client_name || 'N/A'}</td>
             <td>${note.content_preview}</td>
         `;
         tbody.appendChild(row);
@@ -249,20 +282,29 @@ function exportToPDF() {
     doc.setFontSize(20);
     doc.text('Therapy Session Report', 14, 20);
 
-    // Add date range
+    // Add date range and client filter
     doc.setFontSize(12);
     const startDate = document.getElementById('start-date').value;
     const endDate = document.getElementById('end-date').value;
+    const clientFilter = document.getElementById('client-filter');
+    const selectedClientId = clientFilter.value;
+    const selectedClientName = clientFilter.options[clientFilter.selectedIndex].text;
+    
     doc.text(`Period: ${startDate} to ${endDate}`, 14, 30);
+    let startY = 45;
+    if (selectedClientId) {
+        doc.text(`Client: ${selectedClientName}`, 14, 37);
+        startY = 52;
+    }
 
     // Add client time table
     doc.setFontSize(16);
-    doc.text('Client Time Allocation', 14, 45);
+    doc.text('Client Time Allocation', 14, startY);
     
     const clientTable = document.getElementById('client-time-table');
     doc.autoTable({
         html: clientTable,
-        startY: 50,
+        startY: startY + 5,
         theme: 'grid',
         headStyles: { fillColor: [99, 102, 241] }
     });
@@ -331,19 +373,21 @@ function exportToPDF() {
         const sessionNotesTableData = currentSessionNotesData.notes.map(note => [
             new Date(note.date).toLocaleDateString(),
             note.type,
+            note.client_name || 'N/A',
             stripHTML(note.content)
         ]);
         
         doc.autoTable({
-            head: [['Date', 'Type', 'Content']],
+            head: [['Date', 'Type', 'Client', 'Content']],
             body: sessionNotesTableData,
             startY: sessionNotesY + 5,
             theme: 'grid',
             headStyles: { fillColor: [99, 102, 241] },
             columnStyles: {
-                0: { cellWidth: 35 },
-                1: { cellWidth: 30 },
-                2: { cellWidth: 'auto' }
+                0: { cellWidth: 30 },
+                1: { cellWidth: 25 },
+                2: { cellWidth: 40 },
+                3: { cellWidth: 'auto' }
             },
             styles: {
                 fontSize: 9,

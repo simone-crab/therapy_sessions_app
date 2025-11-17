@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.config import get_db
 from backend.services.report_service import ReportService
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import date
 from sqlalchemy import func
 from backend.models.client import Client, ClientStatus
@@ -15,10 +15,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/client-time", response_model=List[Dict])
-def client_time_report(start_date: date, end_date: date, db: Session = Depends(get_db)):
+def client_time_report(
+    start_date: date, 
+    end_date: date, 
+    client_id: Optional[int] = Query(None, description="Filter by client ID"),
+    db: Session = Depends(get_db)
+):
     try:
-        logger.info(f"Generating client time report for period {start_date} to {end_date}")
-        result = ReportService.get_client_time_report(db, start_date, end_date)
+        logger.info(f"Generating client time report for period {start_date} to {end_date}, client_id={client_id}")
+        result = ReportService.get_client_time_report(db, start_date, end_date, client_id)
         logger.info(f"Successfully generated client time report with {len(result)} clients")
         return result
     except Exception as e:
@@ -26,10 +31,15 @@ def client_time_report(start_date: date, end_date: date, db: Session = Depends(g
         raise HTTPException(status_code=500, detail=f"Error generating client time report: {str(e)}")
 
 @router.get("/supervision-time", response_model=Dict)
-def supervision_time_report(start_date: date, end_date: date, db: Session = Depends(get_db)):
+def supervision_time_report(
+    start_date: date, 
+    end_date: date, 
+    client_id: Optional[int] = Query(None, description="Filter by client ID"),
+    db: Session = Depends(get_db)
+):
     try:
-        logger.info(f"Generating supervision time report for period {start_date} to {end_date}")
-        result = ReportService.get_supervision_time_report(db, start_date, end_date)
+        logger.info(f"Generating supervision time report for period {start_date} to {end_date}, client_id={client_id}")
+        result = ReportService.get_supervision_time_report(db, start_date, end_date, client_id)
         logger.info(f"Successfully generated supervision time report with {result['total_sessions']} sessions")
         return result
     except Exception as e:
@@ -37,10 +47,15 @@ def supervision_time_report(start_date: date, end_date: date, db: Session = Depe
         raise HTTPException(status_code=500, detail=f"Error generating supervision time report: {str(e)}")
 
 @router.get("/session-notes", response_model=Dict)
-def session_notes_report(start_date: date, end_date: date, db: Session = Depends(get_db)):
+def session_notes_report(
+    start_date: date, 
+    end_date: date, 
+    client_id: Optional[int] = Query(None, description="Filter by client ID"),
+    db: Session = Depends(get_db)
+):
     try:
-        logger.info(f"Generating session notes report for period {start_date} to {end_date}")
-        result = ReportService.get_session_notes_report(db, start_date, end_date)
+        logger.info(f"Generating session notes report for period {start_date} to {end_date}, client_id={client_id}")
+        result = ReportService.get_session_notes_report(db, start_date, end_date, client_id)
         logger.info(f"Successfully generated session notes report with {result['total_sessions']} notes")
         return result
     except Exception as e:
