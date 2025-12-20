@@ -21,6 +21,7 @@
       "category": "public.app-category.medical",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "icon": "build/icon.icns",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {

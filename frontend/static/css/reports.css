@@ -133,7 +133,7 @@ tr:hover {
 }
 
 .primary-button {
-    background-color: #6366F1;
+    background-color: #676bbd;
     color: white;
     border: none;
     border-radius: 6px;
@@ -153,7 +153,7 @@ tr:hover {
 }
 
 .primary-button:hover {
-    background-color: #4f46e5;
+    background-color: #5a5fa8;
 }
 
 .secondary-button:hover {

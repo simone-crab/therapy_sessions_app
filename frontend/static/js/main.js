@@ -25,8 +25,8 @@ window.addEventListener("load", () => {
     }
   }, 100);
 
-  fetchClients();
-  updateGlobalTimeTotals(); // Initial load of totals
+  fetchClients("active");
+  updateGlobalTimeTotals();
 
   document.getElementById("add-client").addEventListener("click", openClientPrompt);
   document.getElementById("add-note").addEventListener("click", (e) => {
@@ -85,6 +85,11 @@ function renderClientList(clients) {
     li.appendChild(nameSpan);
     li.appendChild(infoBtn);
     list.appendChild(li);
+    
+    // Preserve selection if this is the currently selected client
+    if (currentClientId && client.id === currentClientId) {
+      li.classList.add("selected");
+    }
   });
 }
 
@@ -246,7 +251,10 @@ async function loadNote(type, note) {
   const dateField = type === "assessment" ? "assessment_date" :
                    type === "supervision" ? "supervision_date" : "session_date";
   
-  document.getElementById("note-title").textContent = `${capitalize(type)} on ${note[dateField]}`;
+  // Format date from YYYY-MM-DD to DD-MM-YYYY
+  const dateStr = note[dateField];
+  const formattedDate = dateStr ? dateStr.split("-").reverse().join("-") : "";
+  document.getElementById("note-title").textContent = `${capitalize(type)} on ${formattedDate}`;
   document.getElementById("note-date").value = note[dateField];
   document.getElementById("note-duration").value = note.duration_minutes || "";
   document.getElementById("note-paid").checked = note.is_paid || false;
@@ -508,15 +516,12 @@ async function updateGlobalTimeTotals() {
     }
 
     const data = await res.json();
-    
-    // Update the totals with proper formatting
     document.getElementById("session-total").textContent = formatTime(data.total_session_minutes || 0);
-    document.getElementById("session-count").textContent = data.total_session_count || 0;
+    document.getElementById("session-count").textContent = String(data.total_session_count || 0);
     document.getElementById("supervision-total").textContent = formatTime(data.total_supervision_minutes || 0);
-    document.getElementById("supervision-count").textContent = data.total_supervision_count || 0;
+    document.getElementById("supervision-count").textContent = String(data.total_supervision_count || 0);
   } catch (err) {
     console.error("Error loading time totals:", err);
-    // Show error state in the UI
     document.getElementById("session-total").textContent = "Error";
     document.getElementById("session-count").textContent = "Error";
     document.getElementById("supervision-total").textContent = "Error";
