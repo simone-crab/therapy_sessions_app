@@ -95,6 +95,88 @@ def migrate():
                 )
                 print("   ✅ Unique index for client_code added.")
 
+        # CPD notes: ensure table exists with new structure (duration_hours, organisation, title, medium)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cpd_notes'")
+        has_cpd_notes = cursor.fetchone() is not None
+
+        if not has_cpd_notes:
+            migration_needed = True
+            print("🔄 Creating cpd_notes table (new schema)...")
+            cursor.execute("""
+                CREATE TABLE cpd_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at DATETIME,
+                    updated_at DATETIME,
+                    cpd_date DATE NOT NULL,
+                    duration_hours REAL NOT NULL DEFAULT 1.0,
+                    content TEXT,
+                    organisation TEXT NOT NULL DEFAULT '',
+                    title TEXT NOT NULL DEFAULT '',
+                    medium TEXT NOT NULL DEFAULT 'Online'
+                )
+            """)
+            print("   ✅ cpd_notes table created.")
+        else:
+            cursor.execute("PRAGMA table_info(cpd_notes)")
+            cpd_columns = [row[1] for row in cursor.fetchall()]
+
+            if 'duration_hours' not in cpd_columns or 'organisation' not in cpd_columns or 'title' not in cpd_columns or 'medium' not in cpd_columns:
+                migration_needed = True
+                print("🔄 Migrating cpd_notes table...")
+            if 'duration_hours' not in cpd_columns:
+                print("   Adding duration_hours column...")
+                cursor.execute("ALTER TABLE cpd_notes ADD COLUMN duration_hours REAL DEFAULT 1.0")
+                cursor.execute(
+                    "UPDATE cpd_notes SET duration_hours = CAST(duration_minutes AS REAL) / 60.0 WHERE duration_minutes IS NOT NULL"
+                )
+                cursor.execute("UPDATE cpd_notes SET duration_hours = 1.0 WHERE duration_hours IS NULL")
+                print("   ✅ duration_hours column added.")
+            if 'organisation' not in cpd_columns:
+                cursor.execute("ALTER TABLE cpd_notes ADD COLUMN organisation TEXT DEFAULT ''")
+                print("   ✅ organisation column added.")
+            if 'title' not in cpd_columns:
+                cursor.execute("ALTER TABLE cpd_notes ADD COLUMN title TEXT DEFAULT ''")
+                print("   ✅ title column added.")
+            if 'medium' not in cpd_columns:
+                cursor.execute("ALTER TABLE cpd_notes ADD COLUMN medium TEXT DEFAULT 'Online'")
+                print("   ✅ medium column added.")
+
+            # If old schema has duration_minutes (NOT NULL), rebuild table to drop it
+            if 'duration_minutes' in cpd_columns:
+                migration_needed = True
+                print("🔄 Rebuilding cpd_notes table to remove duration_minutes...")
+                cursor.execute("ALTER TABLE cpd_notes RENAME TO cpd_notes_old")
+                cursor.execute("""
+                    CREATE TABLE cpd_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        cpd_date DATE NOT NULL,
+                        duration_hours REAL NOT NULL DEFAULT 1.0,
+                        content TEXT,
+                        organisation TEXT NOT NULL DEFAULT '',
+                        title TEXT NOT NULL DEFAULT '',
+                        medium TEXT NOT NULL DEFAULT 'Online'
+                    )
+                """)
+                # Build safe select expressions based on existing columns
+                content_expr = "content" if "content" in cpd_columns else "''"
+                duration_hours_expr = "duration_hours" if "duration_hours" in cpd_columns else "CAST(duration_minutes AS REAL) / 60.0"
+                organisation_expr = "organisation" if "organisation" in cpd_columns else "''"
+                title_expr = "title" if "title" in cpd_columns else "''"
+                medium_expr = "medium" if "medium" in cpd_columns else "'Online'"
+                cursor.execute(f"""
+                    INSERT INTO cpd_notes (cpd_date, duration_hours, content, organisation, title, medium)
+                    SELECT cpd_date, {duration_hours_expr}, {content_expr}, {organisation_expr}, {title_expr}, {medium_expr}
+                    FROM cpd_notes_old
+                """)
+                cursor.execute("DROP TABLE cpd_notes_old")
+                print("   ✅ cpd_notes table rebuilt without duration_minutes.")
+
+            # Ensure created_at/updated_at are set for existing rows
+            cursor.execute("UPDATE cpd_notes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+            cursor.execute("UPDATE cpd_notes SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL")
+
         if not migration_needed:
             print("✅ Migration already completed - database is up to date!")
             conn.close()
@@ -131,8 +213,6 @@ if __name__ == "__main__":
     else:
         print("❌ Migration failed. Please check the error messages above.")
         sys.exit(1)
-
-
 
 
 

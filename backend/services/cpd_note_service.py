@@ -11,7 +11,8 @@ class CPDNoteService:
 
     @staticmethod
     def create_cpd_note(db: Session, note: CPDNoteCreate) -> CPDNote:
-        db_note = CPDNote(**note.dict())
+        data = getattr(note, "model_dump", None) and note.model_dump() or note.dict()
+        db_note = CPDNote(**data)
         db.add(db_note)
         db.commit()
         db.refresh(db_note)
@@ -21,7 +22,8 @@ class CPDNoteService:
     def update_cpd_note(db: Session, note_id: int, update_data: CPDNoteUpdate) -> Optional[CPDNote]:
         db_note = db.query(CPDNote).filter(CPDNote.id == note_id).first()
         if db_note:
-            for field, value in update_data.dict(exclude_unset=True).items():
+            update_dict = getattr(update_data, "model_dump", None) and update_data.model_dump(exclude_unset=True) or update_data.dict(exclude_unset=True)
+            for field, value in update_dict.items():
                 setattr(db_note, field, value)
             db.commit()
             db.refresh(db_note)

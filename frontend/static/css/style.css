@@ -285,7 +285,7 @@ input[type="date"] {
 /* CPD card styling */
 .cpd-card {
   background-color: rgba(255, 255, 255, 0.12) !important; /* Lighter grey than clients */
-  border: 1px solid rgba(255, 255, 255, 0.3); /* Border separator */
+  border: 2px solid #4ed3ab; /* Match CPD note border */
   margin-top: var(--size-xxsm);
 }
 
@@ -295,7 +295,7 @@ input[type="date"] {
 
 .cpd-card.selected {
   background-color: #e3e3e3 !important;
-  border-color: rgba(0, 0, 0, 0.2);
+  border-color: #4ed3ab;
 }
 
 .sticky-summary {
@@ -374,6 +374,13 @@ button {
   h2 {
     color: var(--light);
   }
+}
+
+.note-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-xsm);
 }
 
 
@@ -463,6 +470,13 @@ button {
 
 #note-form[hidden] {
   display: none !important;
+}
+
+.editor-label {
+  display: block;
+  font-size: var(--size-xsm);
+  color: var(--light);
+  margin-bottom: var(--size-xxsm);
 }
 
 .editor-container {

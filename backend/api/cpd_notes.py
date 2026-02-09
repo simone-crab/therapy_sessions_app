@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 from backend.config import get_db
 from backend.services.cpd_note_service import CPDNoteService
 from backend.schemas.cpd_note import CPDNoteCreate, CPDNoteUpdate, CPDNoteResponse
 from typing import List
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/", response_model=List[CPDNoteResponse])
@@ -13,7 +16,17 @@ def get_cpd_notes(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=CPDNoteResponse)
 def create_cpd_note(note: CPDNoteCreate, db: Session = Depends(get_db)):
-    return CPDNoteService.create_cpd_note(db, note)
+    try:
+        return CPDNoteService.create_cpd_note(db, note)
+    except OperationalError as e:
+        logger.exception("CPD note create DB error")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error. If you have existing CPD data, run the migration: python3 migrate_database.py from the project root. Error: {str(e)}",
+        )
+    except Exception as e:
+        logger.exception("CPD note create error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{note_id}", response_model=CPDNoteResponse)
 def update_cpd_note(note_id: int, update: CPDNoteUpdate, db: Session = Depends(get_db)):

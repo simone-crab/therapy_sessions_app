@@ -53,6 +53,11 @@
         <div><strong>Client Supervision Time:</strong> <span id="client-supervision-total">0h 0m</span></div>
         <div><strong>Supervisions:</strong> <span id="client-supervision-count">0</span></div>
       </div>
+
+      <!-- CPD-specific totals summary -->
+      <div id="cpd-totals-summary" class="sticky-summary" style="display: none;">
+        <div><strong>CPD Total Time:</strong> <span id="cpd-total-hours">0h</span></div>
+      </div>
     </section>
 
     <section id="editor-pane" class="pane">
@@ -66,6 +71,7 @@
         <label>Date:
           <input type="date" id="note-date" name="note-date" />
         </label>
+        <span id="client-duration-paid-wrap">
         <label>Duration (min):
           <input type="number" id="note-duration" name="note-duration" />
         </label>
@@ -73,8 +79,9 @@
           <input type="checkbox" id="note-paid" />
           Paid
         </label>
+        </span>
       </div>
-      <div class="form-grid ">
+      <div class="form-grid " id="session-type-wrap">
         <div class="session-type-container">
           <label >Session Type:</label>
           <div class="session-type-options">
@@ -94,7 +101,17 @@
         </div>
 
       </div>
+      <!-- CPD-only: Organisation, Title (above Focus and Outcome) -->
+      <div id="cpd-fields-top" class="form-grid cols-2" style="display: none;">
+        <label>Organisation:
+          <input type="text" id="note-organisation" name="note-organisation" required />
+        </label>
+        <label>Title:
+          <input type="text" id="note-title-field" name="note-title-field" required />
+        </label>
+      </div>
     </div>
+        <label id="editor-label" class="editor-label" style="display: none;">Focus and Outcome</label>
         <div class="editor-container">
         <div id="editor-toolbar">
           <span class="ql-formats">
@@ -109,9 +126,26 @@
         </div>
         <div id="editor" spellcheck="true"></div>
       </div>
-      <div class>
-        <button type="submit" class="primary-button">Save</button>
+      <!-- CPD-only: Duration (hours), Medium (below Focus and Outcome) -->
+      <div id="cpd-fields-bottom" class="form-section" style="display: none;">
+        <div class="form-grid cols-2">
+          <label>Duration (hours):
+            <input type="number" id="note-duration-hours" name="note-duration-hours" min="0" step="0.25" />
+          </label>
+          <label>Medium:
+            <select id="note-medium" name="note-medium">
+              <option value="Online">Online</option>
+              <option value="Podcast">Podcast</option>
+              <option value="Book">Book</option>
+              <option value="In-Person">In-Person</option>
+            </select>
+          </label>
         </div>
+      </div>
+      <div class="note-form-actions">
+        <button type="submit" class="primary-button">Save</button>
+        <button type="button" id="delete-note" class="danger-button" style="display: none;">Delete</button>
+      </div>
       </form>
     </section>
   </div>
