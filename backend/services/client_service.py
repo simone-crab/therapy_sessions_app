@@ -75,9 +75,18 @@ class ClientService:
         try:
             # Using .model_dump() as .dict() is deprecated in Pydantic v2
             logger.info(f"Creating new client: {client.model_dump()}")
+            client_code = client.client_code.strip() if client.client_code else None
+            if not client_code:
+                raise ValueError("Client code is required.")
+
+            existing_client = db.query(Client).filter(Client.client_code == client_code).first()
+            if existing_client:
+                raise ValueError("Client code already exists.")
+
             db_client = Client(
                 first_name=client.first_name,
                 last_name=client.last_name,
+                client_code=client_code,
                 email=client.email,
                 phone=client.phone,
                 date_of_birth=client.date_of_birth,
@@ -126,6 +135,19 @@ class ClientService:
             db_client = db.query(Client).filter(Client.id == client_id).first()
             if db_client:
                 update_dict = update_data.model_dump(exclude_unset=True)
+                if "client_code" in update_dict:
+                    client_code = update_dict["client_code"]
+                    if client_code is not None:
+                        client_code = client_code.strip()
+                        update_dict["client_code"] = client_code or None
+                    if client_code:
+                        existing_client = (
+                            db.query(Client)
+                            .filter(Client.client_code == client_code, Client.id != client_id)
+                            .first()
+                        )
+                        if existing_client:
+                            raise ValueError("Client code already exists.")
                 for field, value in update_dict.items():
                     if field != 'id':
                         setattr(db_client, field, value)

@@ -72,7 +72,7 @@ function renderClientList(clients) {
     li.addEventListener("click", () => selectClient(client.id, client.full_name));
 
     const nameSpan = document.createElement("span");
-    nameSpan.textContent = client.full_name;
+    nameSpan.textContent = client.client_code || client.full_name;
 
     const infoBtn = document.createElement("button");
     infoBtn.textContent = "Info";
@@ -394,46 +394,69 @@ function openClientPrompt() {
   currentClientId = null;  // Reset the current client ID
   document.getElementById("client-modal").classList.remove("hidden");
   document.getElementById("client-info-form").reset();
+  document.getElementById("modal-client-code").required = true;
   document.getElementById("toggle-archive-btn").style.display = "none";
   document.getElementById("delete-client-btn").style.display = "none";
 }
 
 async function openEditModal(clientId) {
-  const client = allClients.find(c => c.id === clientId);
-  if (!client) return;
-
+  document.getElementById("client-info-form").reset();
   currentClientId = clientId;
 
-  document.getElementById("modal-first-name").value = client.first_name;
-  document.getElementById("modal-last-name").value = client.last_name;
-  document.getElementById("modal-email").value = client.email || "";
-  document.getElementById("modal-phone").value = client.phone || "";
-  document.getElementById("modal-dob").value = client.date_of_birth || "";
-  document.getElementById("modal-assessment-date").value = client.initial_assessment_date || "";
-  document.getElementById("modal-address1").value = client.address1 || "";
-  document.getElementById("modal-address2").value = client.address2 || "";
-  document.getElementById("modal-city").value = client.city || "";
-  document.getElementById("modal-postcode").value = client.postcode || "";
-  document.getElementById("modal-emergency-name").value = client.emergency_contact_name || "";
-  document.getElementById("modal-emergency-relationship").value = client.emergency_contact_relationship || "";
-  document.getElementById("modal-emergency-phone").value = client.emergency_contact_phone || "";
-  document.getElementById("modal-gp-name").value = client.gp_name || "";
-  document.getElementById("modal-gp-practice").value = client.gp_practice || "";
-  document.getElementById("modal-gp-phone").value = client.gp_phone || "";
+  try {
+    const res = await fetch(`/api/clients/${clientId}`);
+    if (!res.ok) {
+      throw new Error(`Failed to load client: ${res.statusText}`);
+    }
+    const client = await res.json();
 
-  document.getElementById("toggle-archive-btn").style.display = "block";
-  document.getElementById("delete-client-btn").style.display = "block";
-  document.getElementById("toggle-archive-btn").textContent = client.status === "active" ? "Archive" : "Unarchive";
+    document.getElementById("modal-first-name").value = client.first_name;
+    document.getElementById("modal-last-name").value = client.last_name;
+    document.getElementById("modal-email").value = client.email || "";
+    document.getElementById("modal-phone").value = client.phone || "";
+    document.getElementById("modal-dob").value = client.date_of_birth || "";
+    document.getElementById("modal-assessment-date").value = client.initial_assessment_date || "";
+    document.getElementById("modal-client-code").value = client.client_code || "";
+    document.getElementById("modal-address1").value = client.address1 || "";
+    document.getElementById("modal-address2").value = client.address2 || "";
+    document.getElementById("modal-city").value = client.city || "";
+    document.getElementById("modal-postcode").value = client.postcode || "";
+    document.getElementById("modal-emergency-name").value = client.emergency_contact_name || "";
+    document.getElementById("modal-emergency-relationship").value = client.emergency_contact_relationship || "";
+    document.getElementById("modal-emergency-phone").value = client.emergency_contact_phone || "";
+    document.getElementById("modal-gp-name").value = client.gp_name || "";
+    document.getElementById("modal-gp-practice").value = client.gp_practice || "";
+    document.getElementById("modal-gp-phone").value = client.gp_phone || "";
 
-  document.getElementById("client-modal").classList.remove("hidden");
+    document.getElementById("toggle-archive-btn").style.display = "block";
+    document.getElementById("delete-client-btn").style.display = "block";
+    document.getElementById("toggle-archive-btn").textContent = client.status === "active" ? "Archive" : "Unarchive";
+
+    document.getElementById("modal-client-code").required = false;
+    document.getElementById("client-modal").classList.remove("hidden");
+  } catch (error) {
+    console.error("Error loading client details:", error);
+    alert("Failed to load client details. Please try again.");
+  }
 }
 
 async function submitClientEdit(e) {
   e.preventDefault();
   
+  const clientCodeInput = document.getElementById("modal-client-code").value.trim();
+  if (!currentClientId && !clientCodeInput) {
+    alert("Client Code is required for new clients.");
+    return;
+  }
+  if (clientCodeInput && !/^[A-Za-z0-9_.-]+$/.test(clientCodeInput)) {
+    alert("Client Code can only include letters, numbers, hyphen (-), underscore (_), and dot (.).");
+    return;
+  }
+
   const formData = {
     first_name: document.getElementById("modal-first-name").value,
     last_name: document.getElementById("modal-last-name").value,
+    client_code: clientCodeInput || null,
     email: document.getElementById("modal-email").value,
     phone: document.getElementById("modal-phone").value,
     date_of_birth: document.getElementById("modal-dob").value,

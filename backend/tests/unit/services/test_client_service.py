@@ -65,6 +65,7 @@ def test_create_client(db_session_mock):
     client_data = ClientCreate(
         first_name="New",
         last_name="Client",
+        client_code="CL001",
         email="new@example.com",
         phone="1234567890",
         date_of_birth=datetime.date(2000, 1, 1)
@@ -77,6 +78,7 @@ def test_create_client(db_session_mock):
     def refresh_side_effect(instance):
         instance.id = 1 # Simulate ID assignment
     db_session_mock.refresh.side_effect = refresh_side_effect
+    db_session_mock.query(Client).filter(Client.client_code == client_data.client_code).first.return_value = None
 
     # We also need to make sure that when ClientService.create_client creates a Client model instance,
     # it's correctly formed. The service itself handles this.
@@ -118,6 +120,25 @@ def test_update_client_not_found(db_session_mock):
 
     updated_client = ClientService.update_client(db_session_mock, client_id=1, update_data=update_data) # Corrected service call
     assert updated_client is None
+    db_session_mock.commit.assert_not_called()
+    db_session_mock.refresh.assert_not_called()
+
+def test_update_client_duplicate_client_code(db_session_mock):
+    existing_client = Client(id=1, first_name="Old", last_name="Name", email="old@example.com")
+    duplicate_client = Client(id=2, first_name="Dup", last_name="Code", email="dup@example.com")
+
+    query_for_client = MagicMock()
+    query_for_client.filter.return_value.first.return_value = existing_client
+    query_for_duplicate = MagicMock()
+    query_for_duplicate.filter.return_value.first.return_value = duplicate_client
+
+    db_session_mock.query.side_effect = [query_for_client, query_for_duplicate]
+
+    update_data = ClientUpdate(first_name="Old", last_name="Name", client_code="DUP001")
+
+    with pytest.raises(ValueError):
+        ClientService.update_client(db_session_mock, client_id=1, update_data=update_data)
+
     db_session_mock.commit.assert_not_called()
     db_session_mock.refresh.assert_not_called()
 

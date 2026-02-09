@@ -89,7 +89,8 @@ def test_create_and_get_clients(client, db_session):
     # Corrected client data to match ClientCreate schema
     client_data1 = {
         "first_name": "John", "last_name": "Doe", "email": "john.doe@example.com",
-        "phone": "1234567001", "date_of_birth": datetime.date(1990, 1, 1).isoformat()
+        "phone": "1234567001", "date_of_birth": datetime.date(1990, 1, 1).isoformat(),
+        "client_code": "JD-001"
     }
     response1 = client.post("/api/clients/", json=client_data1)
     assert response1.status_code == 200
@@ -97,7 +98,8 @@ def test_create_and_get_clients(client, db_session):
 
     client_data2 = {
         "first_name": "Jane", "last_name": "Smith", "email": "jane.smith@example.com",
-        "phone": "1234567002", "date_of_birth": datetime.date(1992, 2, 2).isoformat()
+        "phone": "1234567002", "date_of_birth": datetime.date(1992, 2, 2).isoformat(),
+        "client_code": "JS_002"
     }
     response2 = client.post("/api/clients/", json=client_data2)
     assert response2.status_code == 200
@@ -134,7 +136,8 @@ def test_create_and_get_clients(client, db_session):
 def test_create_client_success(client):
     client_data = {
         "first_name": "Test", "last_name": "Client", "email": "test.client@example.com",
-        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat()
+        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat(),
+        "client_code": "TC.003"
     }
     response = client.post("/api/clients/", json=client_data)
     assert response.status_code == 200
@@ -149,10 +152,27 @@ def test_create_client_success(client):
     assert get_response.status_code == 200
     assert get_response.json()["first_name"] == client_data["first_name"]
 
+def test_create_client_duplicate_client_code(client):
+    client_data = {
+        "first_name": "Alpha", "last_name": "Client", "email": "alpha@example.com",
+        "phone": "111222333", "date_of_birth": datetime.date(1990, 6, 6).isoformat(),
+        "client_code": "DUP001"
+    }
+    response = client.post("/api/clients/", json=client_data)
+    assert response.status_code == 200
+
+    duplicate_response = client.post("/api/clients/", json={
+        "first_name": "Beta", "last_name": "Client", "email": "beta@example.com",
+        "phone": "444555666", "date_of_birth": datetime.date(1991, 7, 7).isoformat(),
+        "client_code": "DUP001"
+    })
+    assert duplicate_response.status_code == 409
+
 def test_create_client_missing_first_name(client):
     client_data = { # Missing first_name
         "last_name": "Client", "email": "test.client@example.com",
-        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat()
+        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat(),
+        "client_code": "MFN004"
     }
     response = client.post("/api/clients/", json=client_data)
     assert response.status_code == 422
@@ -164,18 +184,41 @@ def test_create_client_missing_first_name(client):
 def test_create_client_missing_phone(client): # phone is mandatory for ClientCreate
     client_data = {
         "first_name": "Test", "last_name": "Client", "email": "test.client@example.com",
-         "date_of_birth": datetime.date(1985, 5, 15).isoformat()
+         "date_of_birth": datetime.date(1985, 5, 15).isoformat(),
+         "client_code": "MP005"
     } # Missing phone
     response = client.post("/api/clients/", json=client_data)
     assert response.status_code == 422
     error_loc = response.json()["detail"][0]["loc"]
     assert "phone" in error_loc or ("body", "phone") == tuple(error_loc)
 
+def test_create_client_missing_client_code(client):
+    client_data = {
+        "first_name": "Test", "last_name": "Client", "email": "test.client@example.com",
+        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat()
+    } # Missing client_code
+    response = client.post("/api/clients/", json=client_data)
+    assert response.status_code == 422
+    error_loc = response.json()["detail"][0]["loc"]
+    assert "client_code" in error_loc or ("body", "client_code") == tuple(error_loc)
+
+def test_create_client_invalid_client_code(client):
+    client_data = {
+        "first_name": "Test", "last_name": "Client", "email": "test.client@example.com",
+        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat(),
+        "client_code": "BAD*CODE"
+    }
+    response = client.post("/api/clients/", json=client_data)
+    assert response.status_code == 422
+    error_loc = response.json()["detail"][0]["loc"]
+    assert "client_code" in error_loc or ("body", "client_code") == tuple(error_loc)
+
 
 def test_create_client_invalid_email(client):
     client_data = {
         "first_name": "Test", "last_name": "Client", "email": "not-an-email",
-        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat()
+        "phone": "1234567890", "date_of_birth": datetime.date(1985, 5, 15).isoformat(),
+        "client_code": "IE006"
     }
     response = client.post("/api/clients/", json=client_data)
     assert response.status_code == 422
@@ -186,7 +229,8 @@ def test_create_client_invalid_email(client):
 def test_get_client_by_id_found(client):
     client_data = {
         "first_name": "Specific", "last_name": "Client", "email": "specific@example.com",
-        "phone": "0987654321", "date_of_birth": datetime.date(1970, 10, 20).isoformat()
+        "phone": "0987654321", "date_of_birth": datetime.date(1970, 10, 20).isoformat(),
+        "client_code": "SC007"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -207,7 +251,8 @@ def test_get_client_by_id_not_found(client):
 def test_update_client_success(client):
     client_data = {
         "first_name": "Original", "last_name": "Name", "email": "original@example.com",
-        "phone": "111222333", "date_of_birth": datetime.date(1980, 1, 1).isoformat()
+        "phone": "111222333", "date_of_birth": datetime.date(1980, 1, 1).isoformat(),
+        "client_code": "ON008"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -230,10 +275,32 @@ def test_update_client_success(client):
     assert get_response.status_code == 200
     assert get_response.json()["first_name"] == update_payload["first_name"]
 
+def test_update_client_duplicate_client_code(client):
+    client_data_1 = {
+        "first_name": "First", "last_name": "Client", "email": "first@example.com",
+        "phone": "101010101", "date_of_birth": datetime.date(1980, 1, 2).isoformat(),
+        "client_code": "DUP100"
+    }
+    client_data_2 = {
+        "first_name": "Second", "last_name": "Client", "email": "second@example.com",
+        "phone": "202020202", "date_of_birth": datetime.date(1981, 2, 3).isoformat(),
+        "client_code": "DUP200"
+    }
+    response_1 = client.post("/api/clients/", json=client_data_1)
+    response_2 = client.post("/api/clients/", json=client_data_2)
+    assert response_1.status_code == 200
+    assert response_2.status_code == 200
+    client_id_2 = response_2.json()["id"]
+
+    update_payload = {"first_name": "Second", "last_name": "Client", "client_code": "DUP100"}
+    response = client.put(f"/api/clients/{client_id_2}", json=update_payload)
+    assert response.status_code == 409
+
 def test_update_client_partial_update(client):
     client_data = {
         "first_name": "Partial", "last_name": "Original", "email": "partial.original@example.com",
-        "phone": "777888999", "date_of_birth": datetime.date(1995, 3, 3).isoformat()
+        "phone": "777888999", "date_of_birth": datetime.date(1995, 3, 3).isoformat(),
+        "client_code": "PO009"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -256,7 +323,8 @@ def test_update_client_not_found(client):
 def test_update_client_invalid_email(client):
     client_data = {
         "first_name": "Email", "last_name": "Test", "email": "valid@example.com",
-        "phone": "123123123", "date_of_birth": datetime.date(1990, 4, 4).isoformat()
+        "phone": "123123123", "date_of_birth": datetime.date(1990, 4, 4).isoformat(),
+        "client_code": "ET010"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -269,11 +337,28 @@ def test_update_client_invalid_email(client):
     # Check if any of the error items refer to the 'email' field in the body
     assert any(err_item["loc"] == ["body", "email"] for err_item in error_detail)
 
+def test_update_client_invalid_client_code(client):
+    client_data = {
+        "first_name": "Valid", "last_name": "Code", "email": "valid.code@example.com",
+        "phone": "555555555", "date_of_birth": datetime.date(1988, 8, 8).isoformat(),
+        "client_code": "VC011"
+    }
+    create_response = client.post("/api/clients/", json=client_data)
+    assert create_response.status_code == 200
+    client_id = create_response.json()["id"]
+
+    update_payload = {"client_code": "BAD*CODE"}
+    response = client.put(f"/api/clients/{client_id}", json=update_payload)
+    assert response.status_code == 422
+    error_detail = response.json()["detail"]
+    assert any(err_item["loc"] == ["body", "client_code"] for err_item in error_detail)
+
 
 def test_archive_client(client):
     client_data = {
         "first_name": "To", "last_name": "Archive", "email": "archive@example.com",
-        "phone": "555666777", "date_of_birth": datetime.date(2000, 1, 1).isoformat()
+        "phone": "555666777", "date_of_birth": datetime.date(2000, 1, 1).isoformat(),
+        "client_code": "TA011"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -295,7 +380,8 @@ def test_archive_client(client):
 def test_unarchive_client(client):
     client_data = {
         "first_name": "To", "last_name": "Unarchive", "email": "unarchive@example.com",
-        "phone": "888999000", "date_of_birth": datetime.date(2001, 2, 2).isoformat()
+        "phone": "888999000", "date_of_birth": datetime.date(2001, 2, 2).isoformat(),
+        "client_code": "TU012"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -331,7 +417,8 @@ def test_archive_client_not_found(client):
 def test_archive_client_invalid_body(client): # Renamed and logic updated
     client_data = {
         "first_name": "Test", "last_name": "ArchiveInvalidBody", "email": "invalid.body@example.com",
-        "phone": "123000123", "date_of_birth": datetime.date(2002, 3, 3).isoformat()
+        "phone": "123000123", "date_of_birth": datetime.date(2002, 3, 3).isoformat(),
+        "client_code": "AIB013"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200
@@ -352,7 +439,8 @@ def test_archive_client_invalid_body(client): # Renamed and logic updated
 def test_delete_client_success(client):
     client_data = {
         "first_name": "To", "last_name": "Delete", "email": "delete@example.com",
-        "phone": "000111222", "date_of_birth": datetime.date(1999, 12, 31).isoformat()
+        "phone": "000111222", "date_of_birth": datetime.date(1999, 12, 31).isoformat(),
+        "client_code": "TD014"
     }
     create_response = client.post("/api/clients/", json=client_data)
     assert create_response.status_code == 200

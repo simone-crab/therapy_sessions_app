@@ -67,7 +67,10 @@ def create_client(client: ClientCreate, db: Session = Depends(get_db)):
     Returns:
         The newly created client object.
     """
-    return ClientService.create_client(db, client)
+    try:
+        return ClientService.create_client(db, client)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 @router.put("/{client_id}", response_model=ClientResponse)
 def update_client(client_id: int, update: ClientUpdate, db: Session = Depends(get_db)):
@@ -85,10 +88,13 @@ def update_client(client_id: int, update: ClientUpdate, db: Session = Depends(ge
     Returns:
         The updated client object.
     """
-    client = ClientService.update_client(db, client_id, update)
-    if not client:
-        raise HTTPException(status_code=404, detail=constants.MSG_CLIENT_NOT_FOUND)
-    return client
+    try:
+        client = ClientService.update_client(db, client_id, update)
+        if not client:
+            raise HTTPException(status_code=404, detail=constants.MSG_CLIENT_NOT_FOUND)
+        return client
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 @router.post("/{client_id}/archive", response_model=ClientResponse)
 def set_archive_status(

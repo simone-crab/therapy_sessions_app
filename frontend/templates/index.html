@@ -103,6 +103,7 @@
             <button class="ql-underline"></button>
           </span>
           <span class="ql-formats">
+            <select class="ql-color"></select>
             <button class="ql-list" value="bullet"></button>
           </span>
         </div>
@@ -145,6 +146,15 @@
             <label>Initial Assessment Date:
               <input type="date" id="modal-assessment-date" />
             </label>
+            <label>Client Code: *
+              <input
+                type="text"
+                id="modal-client-code"
+                required
+                pattern="[A-Za-z0-9_.-]+"
+                title="Use only letters, numbers, hyphen (-), underscore (_), and dot (.)"
+              />
+            </label>
           </div>
         </div>
 
@@ -152,8 +162,8 @@
         <div class="form-section">
           <h3>Contact Information</h3>
           <div class="form-grid">
-            <label>Email:
-              <input type="email" id="modal-email" />
+            <label>Email: *
+              <input type="email" id="modal-email" required />
             </label>
             <label>Phone: *
               <input type="text" id="modal-phone" required />

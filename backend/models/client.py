@@ -26,6 +26,7 @@ class Client(BaseModel):
         id (int): Primary key.
         first_name (str): Client's first name.
         last_name (str): Client's last name.
+        client_code (Optional[str]): Unique client code identifier.
         email (Optional[str]): Client's email address.
         phone (Optional[str]): Client's phone number.
         date_of_birth (Optional[date]): Client's date of birth.
@@ -50,6 +51,7 @@ class Client(BaseModel):
 
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
+    client_code = Column(String(50), unique=True, nullable=True)
     email = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     date_of_birth = Column(Date, nullable=True)
