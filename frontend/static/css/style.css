@@ -282,6 +282,22 @@ input[type="date"] {
   color: var(--dark)
 }
 
+/* CPD card styling */
+.cpd-card {
+  background-color: rgba(255, 255, 255, 0.12) !important; /* Lighter grey than clients */
+  border: 1px solid rgba(255, 255, 255, 0.3); /* Border separator */
+  margin-top: var(--size-xxsm);
+}
+
+.cpd-card:hover {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.cpd-card.selected {
+  background-color: #e3e3e3 !important;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
 .sticky-summary {
   display: flex;
   flex-direction: column;
@@ -404,6 +420,10 @@ button {
 
 .note-supervision {
   border-color: #ab4ed3;
+}
+
+.note-cpd {
+  border-color: #4ed3ab;
 }
 
 .note-card:hover {

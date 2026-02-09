@@ -10,6 +10,7 @@ from backend.models.client import Client, ClientStatus
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
+from backend.models.cpd_note import CPDNote
 
 # Get the user's home directory
 HOME_DIR = os.path.expanduser("~")

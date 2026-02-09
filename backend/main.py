@@ -12,7 +12,7 @@ def print_error(msg):
 
 try:
     from backend.config import create_tables
-    from backend.api import clients, session_notes, assessment_notes, supervision_notes, reports
+    from backend.api import clients, session_notes, assessment_notes, supervision_notes, cpd_notes, reports
 except Exception as e:
     print_error(f"ERROR: Failed to import modules: {e}")
     print_error(traceback.format_exc())
@@ -96,6 +96,7 @@ app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
 app.include_router(session_notes.router, prefix="/api/sessions", tags=["Session Notes"])
 app.include_router(assessment_notes.router, prefix="/api/assessments", tags=["Assessment Notes"])
 app.include_router(supervision_notes.router, prefix="/api/supervisions", tags=["Supervision Notes"])
+app.include_router(cpd_notes.router, prefix="/api/cpd", tags=["CPD Notes"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 
 if __name__ == "__main__":

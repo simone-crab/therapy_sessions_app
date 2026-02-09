@@ -237,10 +237,13 @@
   <div id="note-type-modal" class="modal hidden">
     <div class="modal-content">
       <h3>Select Note Type</h3>
-      <div class="modal-buttons">
+      <div class="modal-buttons" id="client-note-buttons">
         <button class="primary-button" id="create-session-note">Session Note</button>
         <button class="primary-button" id="create-assessment-note">Assessment Note</button>
         <button class="primary-button" id="create-supervision-note">Supervision Note</button>
+      </div>
+      <div class="modal-buttons" id="cpd-note-buttons" style="display: none;">
+        <button class="primary-button" id="create-cpd-note">CPD Note</button>
       </div>
       <div class="modal-actions">
         <button class="secondary-button" id="cancel-note-type">Cancel</button>

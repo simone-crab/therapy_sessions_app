@@ -31,6 +31,7 @@ from backend.models.client import Client
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
+from backend.models.cpd_note import CPDNote
 
 target_metadata = Base.metadata
 
