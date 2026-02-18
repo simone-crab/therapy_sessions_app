@@ -112,7 +112,7 @@
       </div>
     </div>
         <label id="editor-label" class="editor-label" style="display: none;">Focus and Outcome</label>
-        <div class="editor-container">
+      <div class="editor-container">
         <div id="editor-toolbar">
           <span class="ql-formats">
             <button class="ql-bold"></button>
@@ -125,6 +125,15 @@
           </span>
         </div>
         <div id="editor" spellcheck="true"></div>
+      </div>
+      <div class="personal-notes-section" id="personal-notes-section">
+        <hr class="editor-separator" />
+        <button type="button" id="toggle-personal-notes" class="personal-notes-toggle" aria-expanded="false">
+          Personal Notes
+        </button>
+        <div id="personal-notes-content" class="personal-notes-content is-collapsed">
+          <textarea id="personal-notes" name="personal-notes" rows="6"></textarea>
+        </div>
       </div>
       <!-- CPD-only: Duration (hours), Medium (below Focus and Outcome) -->
       <div id="cpd-fields-bottom" class="form-section" style="display: none;">

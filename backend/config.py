@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from backend.models.base import Base
 
@@ -22,6 +22,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create tables
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    _ensure_personal_notes_columns()
+
+def _ensure_personal_notes_columns():
+    inspector = inspect(engine)
+    column_specs = [
+        ("session_notes", "personal_notes"),
+        ("assessment_notes", "personal_notes"),
+        ("supervision_notes", "personal_notes"),
+    ]
+
+    with engine.begin() as conn:
+        for table_name, column_name in column_specs:
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+            if column_name not in existing_columns:
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT"))
 
 # Dependency for FastAPI routes
 def get_db():

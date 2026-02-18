@@ -106,6 +106,22 @@ input[type="date"] {
   font-family: Helvetica, Arial, sans-serif;
 }
 
+textarea,
+textarea#personal-notes {
+  display: block;
+  width: 100%;
+  min-height: 140px;
+  font-size: var(--size-xsm);
+  padding: var(--size-xxsm);
+  border: 1px solid rgba(255, 255, 255, .08);
+  background-color: rgba(255, 255, 255, .08);
+  color: var(--light);
+  box-sizing: border-box;
+  border-radius: var(--size-xxsm);
+  font-family: Helvetica, Arial, sans-serif;
+  resize: vertical;
+}
+
 /* Modal overlay */
 .modal {
   position: fixed;
@@ -445,6 +461,7 @@ button {
 #editor-pane {
   flex:3;
   background-color: var(--dark-3);
+  overflow-y: auto;
   h3 {
     color: var(--light);
   }
@@ -456,6 +473,8 @@ button {
   display: flex;
   flex-grow: 1;
   flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
   gap: var(--size-sm);
   padding: var(--size);
   background: rgba(255, 255, 255, .04);
@@ -485,6 +504,35 @@ button {
   flex-direction: column;
 }
 
+.personal-notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-xxsm);
+}
+
+.personal-notes-toggle {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--light);
+  border: 1px solid rgba(255, 255, 255, .25);
+  padding: var(--size-xxxsm) var(--size-xsm);
+}
+
+.personal-notes-content {
+  display: block;
+}
+
+.personal-notes-content.is-collapsed {
+  display: none;
+}
+
+.editor-separator {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, .35);
+  margin: var(--size-sm) 0 var(--size-xxsm) 0;
+}
+
 #editor {
   height: 180px;
   min-height: 180px;
@@ -501,20 +549,6 @@ button {
 /* Quill editor font */
 #editor .ql-editor {
   font-family: Helvetica, Arial, sans-serif;
-}
-
-/* Style the resize handle in the lower right corner */
-#editor::-webkit-resizer {
-  background-color: rgba(255, 255, 255, 0.3);
-  border-top: 2px solid rgba(255, 255, 255, 0.5);
-  border-left: 2px solid rgba(255, 255, 255, 0.5);
-  cursor: ns-resize;
-  background-image: 
-    linear-gradient(135deg, transparent 0%, transparent 40%, rgba(255, 255, 255, 0.6) 40%, rgba(255, 255, 255, 0.6) 60%, transparent 60%),
-    linear-gradient(135deg, transparent 0%, transparent 50%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.6) 70%, transparent 70%);
-  background-size: 12px 12px;
-  background-position: bottom right;
-  background-repeat: no-repeat;
 }
 
 #editor-toolbar {

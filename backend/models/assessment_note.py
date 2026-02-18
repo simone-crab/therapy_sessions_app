@@ -10,5 +10,6 @@ class AssessmentNote(BaseModel):
     duration_minutes = Column(Integer, nullable=False)
     is_paid = Column(Boolean, default=False)
     content = Column(Text)
+    personal_notes = Column(Text)
 
     client = relationship("Client", back_populates="assessment_notes")

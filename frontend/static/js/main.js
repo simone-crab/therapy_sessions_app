@@ -8,6 +8,7 @@ let isNoteDirty = false;
 let isNewNote = false;
 let isLoadingNote = false;
 let lastClientFilter = "active";
+let isPersonalNotesExpanded = false;
 
 function showError(message) {
   console.error(message);
@@ -79,6 +80,9 @@ window.addEventListener("load", () => {
   const noteForm = document.getElementById("note-form");
   noteForm.addEventListener("input", () => markNoteDirty());
   noteForm.addEventListener("change", () => markNoteDirty());
+  document.getElementById("toggle-personal-notes").addEventListener("click", () => {
+    setPersonalNotesExpanded(!isPersonalNotesExpanded);
+  });
 
   document.getElementById("client-search").addEventListener("input", (e) => {
     const term = e.target.value.toLowerCase();
@@ -91,7 +95,18 @@ window.addEventListener("load", () => {
 
   document.getElementById("toggle-archive-btn").addEventListener("click", toggleArchiveStatus);
   document.getElementById("delete-client-btn").addEventListener("click", deleteClient);
+  setPersonalNotesExpanded(false);
 });
+
+function setPersonalNotesExpanded(expanded) {
+  isPersonalNotesExpanded = expanded;
+  const toggleButton = document.getElementById("toggle-personal-notes");
+  const content = document.getElementById("personal-notes-content");
+  if (!toggleButton || !content) return;
+  toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+  toggleButton.textContent = expanded ? "Personal Notes - Hide" : "Personal Notes - Show";
+  content.classList.toggle("is-collapsed", !expanded);
+}
 
 async function fetchClients(filter = "active") {
   const res = await fetch(`/api/clients/?filter=${filter}`);
@@ -203,6 +218,10 @@ function clearEditorPane() {
   document.getElementById("note-title-field").value = "";
   document.getElementById("note-duration-hours").value = "1";
   document.getElementById("note-medium").value = "Online";
+  document.getElementById("personal-notes").value = "";
+  const personalNotesSection = document.querySelector(".personal-notes-section");
+  if (personalNotesSection) personalNotesSection.style.display = "flex";
+  setPersonalNotesExpanded(false);
   document.getElementById("delete-note").style.display = "none";
 
   // Reset note tracking variables
@@ -410,6 +429,7 @@ async function loadNote(type, note, options = {}) {
   const cpdFieldsTop = document.getElementById("cpd-fields-top");
   const cpdFieldsBottom = document.getElementById("cpd-fields-bottom");
   const editorLabel = document.getElementById("editor-label");
+  const personalNotesSection = document.querySelector(".personal-notes-section");
 
   if (type === "cpd") {
     clientDurationWrap.style.display = "none";
@@ -422,6 +442,7 @@ async function loadNote(type, note, options = {}) {
     document.getElementById("note-title-field").value = note.title || "";
     document.getElementById("note-duration-hours").value = note.duration_hours != null ? note.duration_hours : "1";
     document.getElementById("note-medium").value = note.medium || "Online";
+    if (personalNotesSection) personalNotesSection.style.display = "none";
     document.getElementById("delete-note").style.display = "inline-flex";
   } else {
     clientDurationWrap.style.display = "";
@@ -431,6 +452,8 @@ async function loadNote(type, note, options = {}) {
     editorLabel.style.display = "none";
     document.getElementById("note-duration").value = note.duration_minutes || "";
     document.getElementById("note-paid").checked = note.is_paid || false;
+    if (personalNotesSection) personalNotesSection.style.display = "flex";
+    setPersonalNotesExpanded(isPersonalNotesExpanded);
     document.getElementById("delete-note").style.display = "inline-flex";
   }
   if (type === "session") {
@@ -456,6 +479,7 @@ async function loadNote(type, note, options = {}) {
   document.getElementById("note-organisation").required = type === "cpd";
   document.getElementById("note-title-field").required = type === "cpd";
   quill.setText(note.content || "");
+  document.getElementById("personal-notes").value = type === "cpd" ? "" : (note.personal_notes || "");
   setLoadingNote(false);
 }
 
@@ -498,6 +522,7 @@ async function submitNoteUpdate(e) {
     payload.title = document.getElementById("note-title-field").value.trim() || "";
     payload.medium = document.getElementById("note-medium").value || "Online";
   } else {
+    payload.personal_notes = document.getElementById("personal-notes").value;
     const duration = document.getElementById("note-duration").value;
     if (duration) {
       payload.duration_minutes = parseInt(duration);
@@ -579,17 +604,20 @@ async function createNewNote(type) {
       session_date: today,
       duration_minutes: 50,
       is_paid: false,
-      session_type: "In-Person"
+      session_type: "In-Person",
+      personal_notes: ""
     }),
     ...(type === "assessment" && {
       client_id: currentClientId,
       assessment_date: today,
       duration_minutes: 50,
-      is_paid: false
+      is_paid: false,
+      personal_notes: ""
     }),
     ...(type === "supervision" && {
       client_id: currentClientId,
-      supervision_date: today
+      supervision_date: today,
+      personal_notes: ""
     }),
     ...(type === "cpd" && {
       cpd_date: today,

@@ -13,22 +13,23 @@ Usage:
 import os
 import sqlite3
 import sys
+import argparse
 
 # Get the database path (same as in the app)
 HOME_DIR = os.path.expanduser("~")
 APP_DATA_DIR = os.path.join(HOME_DIR, "Library", "Application Support", "therapy-sessions-app")
-DB_PATH = os.path.join(APP_DATA_DIR, "therapy.db")
+DEFAULT_DB_PATH = os.path.join(APP_DATA_DIR, "therapy.db")
 
-def migrate():
-    if not os.path.exists(DB_PATH):
-        print(f"❌ Database not found at {DB_PATH}")
+def migrate(db_path: str):
+    if not os.path.exists(db_path):
+        print(f"❌ Database not found at {db_path}")
         print("   The database will be created automatically when you first run the app.")
         return False
     
-    print(f"📂 Found database at: {DB_PATH}")
+    print(f"📂 Found database at: {db_path}")
     print("🔍 Checking if migration is needed...")
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     try:
@@ -105,8 +106,8 @@ def migrate():
             cursor.execute("""
                 CREATE TABLE cpd_notes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    created_at DATETIME,
-                    updated_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     cpd_date DATE NOT NULL,
                     duration_hours REAL NOT NULL DEFAULT 1.0,
                     content TEXT,
@@ -174,8 +175,19 @@ def migrate():
                 print("   ✅ cpd_notes table rebuilt without duration_minutes.")
 
             # Ensure created_at/updated_at are set for existing rows
-            cursor.execute("UPDATE cpd_notes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
-            cursor.execute("UPDATE cpd_notes SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL")
+            cursor.execute("SELECT COUNT(*) FROM cpd_notes WHERE created_at IS NULL")
+            null_created_at_count = cursor.fetchone()[0]
+            if null_created_at_count > 0:
+                migration_needed = True
+                print(f"   Backfilling created_at on {null_created_at_count} CPD rows...")
+                cursor.execute("UPDATE cpd_notes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+
+            cursor.execute("SELECT COUNT(*) FROM cpd_notes WHERE updated_at IS NULL")
+            null_updated_at_count = cursor.fetchone()[0]
+            if null_updated_at_count > 0:
+                migration_needed = True
+                print(f"   Backfilling updated_at on {null_updated_at_count} CPD rows...")
+                cursor.execute("UPDATE cpd_notes SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL")
 
         if not migration_needed:
             print("✅ Migration already completed - database is up to date!")
@@ -204,7 +216,15 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    success = migrate()
+    parser = argparse.ArgumentParser(description="Migrate Therapy Session Manager SQLite database.")
+    parser.add_argument(
+        "--db-path",
+        default=DEFAULT_DB_PATH,
+        help=f"Path to therapy.db (default: {DEFAULT_DB_PATH})",
+    )
+    args = parser.parse_args()
+
+    success = migrate(args.db_path)
     
     print()
     if success:
@@ -213,7 +233,6 @@ if __name__ == "__main__":
     else:
         print("❌ Migration failed. Please check the error messages above.")
         sys.exit(1)
-
 
 
 

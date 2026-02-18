@@ -3,6 +3,7 @@ from sqlalchemy import func, and_, case, extract
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
+from backend.models.cpd_note import CPDNote
 from backend.models.client import Client
 from typing import List, Dict, Optional
 from datetime import date
@@ -413,4 +414,79 @@ class ReportService:
             }
         except Exception as e:
             logger.error(f"Error in get_session_notes_report: {str(e)}", exc_info=True)
+            raise
+
+    @staticmethod
+    def get_cpd_notes_report(db: Session, start_date: date, end_date: date) -> Dict:
+        try:
+            logger.info(f"Querying CPD notes report from {start_date} to {end_date}")
+
+            cpd_filter = and_(
+                CPDNote.cpd_date >= start_date,
+                CPDNote.cpd_date <= end_date
+            )
+
+            monthly_data = db.query(
+                extract('year', CPDNote.cpd_date).label('year'),
+                extract('month', CPDNote.cpd_date).label('month'),
+                func.sum(CPDNote.duration_hours).label('total_hours'),
+                func.count(CPDNote.id).label('note_count')
+            ).filter(cpd_filter).group_by(
+                extract('year', CPDNote.cpd_date),
+                extract('month', CPDNote.cpd_date)
+            ).all()
+
+            monthly_dict = {}
+            for row in monthly_data:
+                month_key = f"{int(row.year)}-{int(row.month):02d}"
+                monthly_dict[month_key] = {
+                    "year": int(row.year),
+                    "month": int(row.month),
+                    "total_hours": float(row.total_hours or 0),
+                    "note_count": row.note_count or 0
+                }
+
+            all_months = []
+            current = start_date.replace(day=1)
+            end_month = end_date.replace(day=1)
+
+            while current <= end_month:
+                month_key = f"{current.year}-{current.month:02d}"
+                month_name = current.strftime("%B %Y")
+                month_data = monthly_dict.get(month_key, {})
+                all_months.append({
+                    "month_key": month_key,
+                    "month_name": month_name,
+                    "total_hours": month_data.get("total_hours", 0.0),
+                    "note_count": month_data.get("note_count", 0)
+                })
+
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+
+            notes = db.query(CPDNote).filter(cpd_filter).order_by(CPDNote.cpd_date.asc()).all()
+            total_hours = sum((n.duration_hours or 0) for n in notes)
+
+            return {
+                "total_notes": len(notes),
+                "total_hours": total_hours,
+                "monthly_data": all_months,
+                "notes": [
+                    {
+                        "id": n.id,
+                        "date": n.cpd_date,
+                        "title": n.title or "",
+                        "organisation": n.organisation or "",
+                        "medium": n.medium or "",
+                        "duration_hours": float(n.duration_hours or 0),
+                        "content_preview": n.content[:100] + "..." if n.content and len(n.content) > 100 else (n.content or ""),
+                        "content": n.content or ""
+                    }
+                    for n in notes
+                ]
+            }
+        except Exception as e:
+            logger.error(f"Error in get_cpd_notes_report: {str(e)}", exc_info=True)
             raise

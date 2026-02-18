@@ -8,4 +8,4 @@ class SupervisionNote(BaseModel):
     supervision_date = Column(Date, nullable=False)
     duration_minutes = Column(Integer, nullable=False, default=50)
     content = Column(Text)
-
+    personal_notes = Column(Text)

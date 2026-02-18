@@ -6,6 +6,7 @@ class SupervisionNoteBase(BaseModel):
     client_id: int
     supervision_date: date
     content: Optional[str] = None
+    personal_notes: Optional[str] = None
     duration_minutes: Optional[int] = None
 
 class SupervisionNoteCreate(SupervisionNoteBase):
@@ -22,5 +23,6 @@ class SupervisionNoteResponse(SupervisionNoteBase):
 class SupervisionNoteUpdate(BaseModel):
     supervision_date: Optional[date] = None
     content: Optional[str] = None
+    personal_notes: Optional[str] = None
     duration_minutes: Optional[int] = None
     client_id: Optional[int] = None

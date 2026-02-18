@@ -22,7 +22,7 @@ def create_cpd_note(note: CPDNoteCreate, db: Session = Depends(get_db)):
         logger.exception("CPD note create DB error")
         raise HTTPException(
             status_code=500,
-            detail=f"Database error. If you have existing CPD data, run the migration: python3 migrate_database.py from the project root. Error: {str(e)}",
+            detail=f"Database error. If you have existing CPD data, run the migration file: python3 /path/to/migrate_database.py. Error: {str(e)}",
         )
     except Exception as e:
         logger.exception("CPD note create error")
@@ -41,4 +41,3 @@ def delete_cpd_note(note_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="CPD note not found")
     return {"message": "CPD note deleted"}
-

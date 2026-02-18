@@ -62,6 +62,21 @@ def session_notes_report(
         logger.error(f"Error generating session notes report: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating session notes report: {str(e)}")
 
+@router.get("/cpd-notes", response_model=Dict)
+def cpd_notes_report(
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    try:
+        logger.info(f"Generating CPD notes report for period {start_date} to {end_date}")
+        result = ReportService.get_cpd_notes_report(db, start_date, end_date)
+        logger.info(f"Successfully generated CPD notes report with {result['total_notes']} notes")
+        return result
+    except Exception as e:
+        logger.error(f"Error generating CPD notes report: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error generating CPD notes report: {str(e)}")
+
 @router.get("/totals")
 def get_totals(filter: str = "active", db: Session = Depends(get_db)):
     try:
@@ -167,4 +182,3 @@ def get_client_totals(client_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error calculating client totals: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error calculating client totals: {str(e)}")
-

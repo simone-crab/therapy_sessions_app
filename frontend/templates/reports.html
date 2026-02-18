@@ -40,7 +40,7 @@
         </div>
 
         <div class="report-content">
-            <div class="report-section">
+            <div class="report-section" id="client-time-section">
                 <h2>Client Time Allocation</h2>
                 <div class="chart-container">
                     <canvas id="client-time-chart"></canvas>
@@ -61,7 +61,7 @@
                 </div>
             </div>
 
-            <div class="report-section">
+            <div class="report-section" id="supervision-section">
                 <h2>Supervision Time</h2>
                 <div class="chart-container">
                     <canvas id="supervision-chart"></canvas>
@@ -79,14 +79,14 @@
                 </div>
             </div>
 
-            <div class="report-section">
-                <h2>Session Notes & Times</h2>
+            <div class="report-section" id="session-notes-section">
+                <h2 id="session-notes-title">Session Notes & Times</h2>
                 <div class="chart-container">
                     <canvas id="session-notes-chart"></canvas>
                 </div>
                 <div class="table-container">
                     <table id="session-notes-table">
-                        <thead>
+                        <thead id="session-notes-thead">
                             <tr>
                                 <th>Date</th>
                                 <th>Type</th>

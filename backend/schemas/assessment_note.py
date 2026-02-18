@@ -7,6 +7,7 @@ class AssessmentNoteBase(BaseModel):
     duration_minutes: int
     is_paid: bool = False
     content: Optional[str] = None
+    personal_notes: Optional[str] = None
 
 class AssessmentNoteCreate(AssessmentNoteBase):
     client_id: int
@@ -16,6 +17,7 @@ class AssessmentNoteUpdate(AssessmentNoteBase):
     duration_minutes: Optional[int] = None
     is_paid: Optional[bool] = None
     content: Optional[str] = None
+    personal_notes: Optional[str] = None
 
 class AssessmentNoteResponse(AssessmentNoteBase):
     id: int
