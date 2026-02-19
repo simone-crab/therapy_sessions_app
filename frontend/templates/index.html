@@ -126,6 +126,13 @@
         </div>
         <div id="editor" spellcheck="true"></div>
       </div>
+      <div id="supervision-summary-section" class="form-section" style="display: none;">
+        <hr class="editor-separator" />
+        <label class="supervision-summary-label">Summary:
+          <input type="text" id="supervision-summary" name="supervision-summary" maxlength="100" />
+        </label>
+        <div id="supervision-summary-counter" class="char-counter">0/100</div>
+      </div>
       <div class="personal-notes-section" id="personal-notes-section">
         <hr class="editor-separator" />
         <button type="button" id="toggle-personal-notes" class="personal-notes-toggle" aria-expanded="false">
@@ -150,6 +157,10 @@
             </select>
           </label>
         </div>
+        <label class="cpd-link-label">Link:
+          <input type="url" id="note-link" name="note-link" placeholder="https://example.com" />
+        </label>
+        <a id="note-link-anchor" class="cpd-link-anchor" href="#" target="_blank" rel="noopener noreferrer" style="display: none;"></a>
       </div>
       <div class="note-form-actions">
         <button type="submit" class="primary-button">Save</button>

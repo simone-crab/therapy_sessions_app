@@ -1,8 +1,8 @@
 {
   "name": "therapy-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "main.js",
-  "description": "Therapy Session Manager",
+  "description": "SOLU NOTES",
   "author": "Simone C.",
   "license": "MIT",
   "scripts": {
@@ -15,7 +15,7 @@
   },
   "build": {
     "appId": "com.simone.therapysessionmanager",
-    "productName": "Therapy Session Manager",
+    "productName": "SOLU NOTES",
     "mac": {
       "target": "dmg",
       "category": "public.app-category.medical",

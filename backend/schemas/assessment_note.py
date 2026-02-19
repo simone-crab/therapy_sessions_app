@@ -8,6 +8,7 @@ class AssessmentNoteBase(BaseModel):
     is_paid: bool = False
     content: Optional[str] = None
     personal_notes: Optional[str] = None
+    session_type: str = "Online"
 
 class AssessmentNoteCreate(AssessmentNoteBase):
     client_id: int
@@ -18,6 +19,7 @@ class AssessmentNoteUpdate(AssessmentNoteBase):
     is_paid: Optional[bool] = None
     content: Optional[str] = None
     personal_notes: Optional[str] = None
+    session_type: Optional[str] = None
 
 class AssessmentNoteResponse(AssessmentNoteBase):
     id: int

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, Text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, Date, Text, ForeignKey, Boolean, String
 from sqlalchemy.orm import relationship
 from backend.models.base import BaseModel
 
@@ -11,5 +11,6 @@ class AssessmentNote(BaseModel):
     is_paid = Column(Boolean, default=False)
     content = Column(Text)
     personal_notes = Column(Text)
+    session_type = Column(String(20), nullable=False, default="Online")
 
     client = relationship("Client", back_populates="assessment_notes")

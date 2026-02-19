@@ -68,6 +68,16 @@ async function loadClients() {
         separatorOption.textContent = '──────────';
         clientFilter.appendChild(separatorOption);
 
+        const supervisionOption = document.createElement('option');
+        supervisionOption.value = 'supervision';
+        supervisionOption.textContent = 'Supervision';
+        clientFilter.appendChild(supervisionOption);
+
+        const secondSeparatorOption = document.createElement('option');
+        secondSeparatorOption.disabled = true;
+        secondSeparatorOption.textContent = '──────────';
+        clientFilter.appendChild(secondSeparatorOption);
+
         const cpdOption = document.createElement('option');
         cpdOption.value = 'cpd';
         cpdOption.textContent = 'CPD';
@@ -80,6 +90,7 @@ async function loadClients() {
 function setReportMode(mode) {
     const clientTimeSection = document.getElementById('client-time-section');
     const supervisionSection = document.getElementById('supervision-section');
+    const sessionNotesSection = document.getElementById('session-notes-section');
     const sessionNotesTitle = document.getElementById('session-notes-title');
     const sessionNotesHead = document.getElementById('session-notes-thead');
 
@@ -88,11 +99,17 @@ function setReportMode(mode) {
     if (mode === 'cpd') {
         clientTimeSection.style.display = 'none';
         supervisionSection.style.display = 'none';
+        sessionNotesSection.style.display = '';
         sessionNotesTitle.textContent = 'CPD Notes Summary';
         sessionNotesHead.innerHTML = cpdHead;
+    } else if (mode === 'supervision') {
+        clientTimeSection.style.display = 'none';
+        supervisionSection.style.display = '';
+        sessionNotesSection.style.display = 'none';
     } else {
         clientTimeSection.style.display = '';
-        supervisionSection.style.display = '';
+        supervisionSection.style.display = 'none';
+        sessionNotesSection.style.display = '';
         sessionNotesTitle.textContent = 'Session Notes & Times';
         sessionNotesHead.innerHTML = sessionNotesDefaultHead;
     }
@@ -132,6 +149,26 @@ async function generateReport() {
             return;
         }
 
+        if (clientId === 'supervision') {
+            const supervisionResponse = await fetch(`/api/reports/supervision-time?${baseParams}`);
+            if (!supervisionResponse.ok) {
+                throw new Error(`Supervision time API error: ${supervisionResponse.status} ${supervisionResponse.statusText}`);
+            }
+
+            const supervisionData = await supervisionResponse.json();
+            setReportMode('supervision');
+            updateSupervisionChart(supervisionData);
+            updateSupervisionTable(supervisionData);
+
+            currentClientTimeData = null;
+            currentSessionNotesData = null;
+            currentCPDData = null;
+            currentSupervisionData = supervisionData;
+
+            document.getElementById('export-pdf').disabled = false;
+            return;
+        }
+
         const clientParam = clientId ? `&client_id=${clientId}` : '';
         console.log('Fetching client time data...');
         const clientTimeResponse = await fetch(`/api/reports/client-time?${baseParams}${clientParam}`);
@@ -140,14 +177,6 @@ async function generateReport() {
         }
         const clientTimeData = await clientTimeResponse.json();
         console.log('Client time data:', clientTimeData);
-
-        console.log('Fetching supervision data...');
-        const supervisionResponse = await fetch(`/api/reports/supervision-time?${baseParams}${clientParam}`);
-        if (!supervisionResponse.ok) {
-            throw new Error(`Supervision time API error: ${supervisionResponse.status} ${supervisionResponse.statusText}`);
-        }
-        const supervisionData = await supervisionResponse.json();
-        console.log('Supervision data:', supervisionData);
 
         console.log('Fetching session notes data...');
         const sessionNotesResponse = await fetch(`/api/reports/session-notes?${baseParams}${clientParam}`);
@@ -160,14 +189,12 @@ async function generateReport() {
         setReportMode('clients');
         updateClientTimeChart(clientTimeData);
         updateClientTimeTable(clientTimeData);
-        updateSupervisionChart(supervisionData);
-        updateSupervisionTable(supervisionData);
         updateSessionNotesChart(sessionNotesData);
         updateSessionNotesTable(sessionNotesData);
         
         // Store data for PDF export
         currentClientTimeData = clientTimeData;
-        currentSupervisionData = supervisionData;
+        currentSupervisionData = null;
         currentSessionNotesData = sessionNotesData;
         currentCPDData = null;
 
@@ -335,6 +362,7 @@ function updateSupervisionTable(data) {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${new Date(note.date).toLocaleDateString()}</td>
+            <td>${note.summary || ''}</td>
             <td>${note.content_preview}</td>
         `;
         tbody.appendChild(row);
@@ -427,7 +455,8 @@ function exportToPDF() {
     doc.text(`Period: ${startDate} to ${endDate}`, 14, 30);
     let startY = 45;
     if (selectedClientId) {
-        doc.text(`Client: ${selectedClientName}`, 14, 37);
+        const label = (selectedClientId === 'cpd' || selectedClientId === 'supervision') ? 'Section' : 'Client';
+        doc.text(`${label}: ${selectedClientName}`, 14, 37);
         startY = 52;
     }
 
@@ -478,6 +507,47 @@ function exportToPDF() {
         return;
     }
 
+    if (currentReportMode === 'supervision') {
+        doc.setFontSize(16);
+        doc.text('Supervision Notes Summary', 14, startY);
+        doc.setFontSize(11);
+        doc.text(`Total Notes: ${currentSupervisionData?.total_sessions || 0}`, 14, startY + 7);
+        doc.text(`Total Hours: ${(currentSupervisionData?.total_hours || 0).toFixed(2)}`, 60, startY + 7);
+
+        const stripHTML = (html) => {
+            if (!html) return '(No content)';
+            const tmp = document.createElement('DIV');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
+        };
+
+        const supervisionTableData = (currentSupervisionData?.notes || []).map(note => ([
+            new Date(note.date).toLocaleDateString(),
+            note.summary || '',
+            stripHTML(note.content)
+        ]));
+
+        doc.autoTable({
+            head: [['Date', 'Summary', 'Content']],
+            body: supervisionTableData,
+            startY: startY + 12,
+            theme: 'grid',
+            headStyles: { fillColor: [99, 102, 241] },
+            styles: {
+                fontSize: 9,
+                cellPadding: 3
+            },
+            columnStyles: {
+                0: { cellWidth: 30 },
+                1: { cellWidth: 45 },
+                2: { cellWidth: 'auto' }
+            }
+        });
+
+        doc.save('therapy-report-supervision.pdf');
+        return;
+    }
+
     // Add client time table
     doc.setFontSize(16);
     doc.text('Client Time Allocation', 14, startY);
@@ -489,52 +559,6 @@ function exportToPDF() {
         theme: 'grid',
         headStyles: { fillColor: [99, 102, 241] }
     });
-
-    // Add supervision table with full content
-    const supervisionY = doc.lastAutoTable.finalY + 20;
-    doc.setFontSize(16);
-    doc.text('Supervision Time', 14, supervisionY);
-    
-    if (currentSupervisionData && currentSupervisionData.notes && currentSupervisionData.notes.length > 0) {
-        // Helper function to strip HTML tags and convert to plain text
-        const stripHTML = (html) => {
-            if (!html) return '(No content)';
-            const tmp = document.createElement('DIV');
-            tmp.innerHTML = html;
-            return tmp.textContent || tmp.innerText || '';
-        };
-        
-        // Build table data with full content for PDF
-        const supervisionTableData = currentSupervisionData.notes.map(note => [
-            new Date(note.date).toLocaleDateString(),
-            stripHTML(note.content)
-        ]);
-        
-        doc.autoTable({
-            head: [['Date', 'Content']],
-            body: supervisionTableData,
-            startY: supervisionY + 5,
-            theme: 'grid',
-            headStyles: { fillColor: [99, 102, 241] },
-            columnStyles: {
-                0: { cellWidth: 40 },
-                1: { cellWidth: 'auto' }
-            },
-            styles: {
-                fontSize: 9,
-                cellPadding: 3
-            }
-        });
-    } else {
-        // Fallback to HTML table if data not available
-        const supervisionTable = document.getElementById('supervision-table');
-        doc.autoTable({
-            html: supervisionTable,
-            startY: supervisionY + 5,
-            theme: 'grid',
-            headStyles: { fillColor: [99, 102, 241] }
-        });
-    }
 
     // Add session notes table with full content
     const sessionNotesY = doc.lastAutoTable.finalY + 20;

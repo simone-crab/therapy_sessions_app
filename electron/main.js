@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, MenuItem, dialog } = require('electron');
+const { app, BrowserWindow, Menu, MenuItem, dialog, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -10,6 +10,7 @@ let isBackendStarting = false;
 let isWindowCreating = false;
 let isWaitingForBackend = false;
 let isContentLoaded = false; // Track if the main content has been loaded
+const BACKEND_URL = 'http://127.0.0.1:8000';
 
 function createErrorWindow(errorMessage) {
   const errorWin = new BrowserWindow({
@@ -25,7 +26,7 @@ function createErrorWindow(errorMessage) {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Error - Therapy Session Manager</title>
+      <title>Error - SOLU NOTES</title>
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -64,11 +65,21 @@ function createErrorWindow(errorMessage) {
 }
 
 function createLoadingScreen() {
+  const brandingPath = path.join(__dirname, 'build', 'SOLUNOTES_BRANDING_2.jpg');
+  let backgroundCss = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+  try {
+    const imageBuffer = fs.readFileSync(brandingPath);
+    const imageDataUrl = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+    backgroundCss = `url('${imageDataUrl}') center / cover no-repeat`;
+  } catch (err) {
+    console.warn(`[loading] Could not load branding image at ${brandingPath}. Using gradient fallback.`);
+  }
+
   const loadingHTML = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Therapy Session Manager</title>
+      <title>SOLU NOTES</title>
       <style>
         * {
           margin: 0;
@@ -82,15 +93,19 @@ function createLoadingScreen() {
           justify-content: center;
           align-items: center;
           height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: ${backgroundCss};
           color: white;
         }
         .spinner-container {
           text-align: center;
+          background: rgba(0, 0, 0, 0.35);
+          padding: 20px 24px;
+          border-radius: 12px;
+          backdrop-filter: blur(2px);
         }
         .spinner {
           border: 4px solid rgba(255, 255, 255, 0.3);
-          border-top: 4px solid white;
+          border-top: 4px solid #f5a623;
           border-radius: 50%;
           width: 60px;
           height: 60px;
@@ -115,7 +130,7 @@ function createLoadingScreen() {
     <body>
       <div class="spinner-container">
         <div class="spinner"></div>
-        <h1>Therapy Session Manager</h1>
+        <h1>SOLU NOTES</h1>
         <p>Starting application...</p>
       </div>
     </body>
@@ -157,7 +172,7 @@ function createWindow() {
   // Track when content is successfully loaded to prevent unnecessary reloads
   mainWindow.webContents.on('did-finish-load', () => {
     const url = mainWindow.webContents.getURL();
-    if (url && url.includes('localhost:8000') && !url.includes('data:text/html')) {
+    if (url && (url.includes('127.0.0.1:8000') || url.includes('localhost:8000')) && !url.includes('data:text/html')) {
       console.log("✅ Main content finished loading");
       isContentLoaded = true;
     }
@@ -183,7 +198,27 @@ function createWindow() {
     console.error(`[window] Failed to load: ${errorCode} - ${errorDescription}`);
     if (errorCode === -106) {
       // ERR_INTERNET_DISCONNECTED or connection refused
-      createErrorWindow(`Failed to connect to backend server.\n\nError: ${errorDescription}\n\nPlease ensure the backend is running on http://localhost:8000`);
+      createErrorWindow(`Failed to connect to backend server.\n\nError: ${errorDescription}\n\nPlease ensure the backend is running on ${BACKEND_URL}`);
+    }
+  });
+
+  // Open external URLs in the system browser, not inside the Electron window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isAppUrl =
+      url.startsWith('data:text/html') ||
+      url.startsWith('http://127.0.0.1:8000') ||
+      url.startsWith('http://localhost:8000');
+    if (!isAppUrl && /^https?:\/\//i.test(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
     }
   });
   
@@ -257,14 +292,14 @@ function waitForBackendAndLoadContent(retries = 40) {
   
   isWaitingForBackend = true;
   
-  const request = http.get('http://localhost:8000', { timeout: 1000 }, res => {
+  const request = http.get(BACKEND_URL, { timeout: 1000 }, res => {
     if (res.statusCode === 200) {
       console.log("✅ Backend is ready. Loading content...");
       isWaitingForBackend = false;
       // Load the actual application content ONLY if not already loaded
       if (mainWindow && !mainWindow.isDestroyed() && !isContentLoaded) {
         isContentLoaded = true;
-        mainWindow.loadURL('http://localhost:8000');
+        mainWindow.loadURL(BACKEND_URL);
       } else if (isContentLoaded) {
         console.log("ℹ️ Content already loaded, skipping reload");
       }

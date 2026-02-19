@@ -7,6 +7,7 @@ class CPDNoteBase(BaseModel):
     cpd_date: date
     content: Optional[str] = None
     duration_hours: float = Field(ge=0, description="Time logged in hours (e.g. 1.5, 3)")
+    link_url: str = ""
     organisation: str = ""
     title: str = ""
     medium: str = "Online"  # Online | Podcast | Book | In-Person
@@ -29,6 +30,7 @@ class CPDNoteUpdate(BaseModel):
     cpd_date: Optional[date] = None
     content: Optional[str] = None
     duration_hours: Optional[float] = Field(None, ge=0)
+    link_url: Optional[str] = None
     organisation: Optional[str] = None
     title: Optional[str] = None
     medium: Optional[str] = None

@@ -26,17 +26,28 @@ def create_tables():
 
 def _ensure_personal_notes_columns():
     inspector = inspect(engine)
-    column_specs = [
+    text_column_specs = [
         ("session_notes", "personal_notes"),
         ("assessment_notes", "personal_notes"),
         ("supervision_notes", "personal_notes"),
     ]
+    varchar_column_specs = [
+        ("cpd_notes", "link_url", 2048),
+        ("assessment_notes", "session_type", 20),
+        ("supervision_notes", "session_type", 20),
+        ("supervision_notes", "summary", 100),
+    ]
 
     with engine.begin() as conn:
-        for table_name, column_name in column_specs:
+        for table_name, column_name in text_column_specs:
             existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
             if column_name not in existing_columns:
                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT"))
+        for table_name, column_name, size in varchar_column_specs:
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+            if column_name not in existing_columns:
+                default_value = "Online" if column_name == "session_type" else ""
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} VARCHAR({size}) NOT NULL DEFAULT '{default_value}'"))
 
 # Dependency for FastAPI routes
 def get_db():

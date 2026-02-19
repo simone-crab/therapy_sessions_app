@@ -245,6 +245,7 @@ class ReportService:
                     {
                         "id": n.id,
                         "date": n.supervision_date,
+                        "summary": n.summary or "",
                         "content_preview": n.content[:100] + "..." if n.content and len(n.content) > 100 else (n.content or ""),
                         "content": n.content or ""
                     }

@@ -219,6 +219,7 @@ textarea#personal-notes {
   display: flex;
   flex-direction: column;
   gap: var(--size);
+  min-width: 0;
 }
 
 .pane-header {
@@ -299,6 +300,21 @@ textarea#personal-notes {
 }
 
 /* CPD card styling */
+.supervision-card {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border: 2px solid #ab4ed3;
+  margin-top: var(--size-xxsm);
+}
+
+.supervision-card:hover {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.supervision-card.selected {
+  background-color: #e3e3e3 !important;
+  border-color: #ab4ed3;
+}
+
 .cpd-card {
   background-color: rgba(255, 255, 255, 0.12) !important; /* Lighter grey than clients */
   border: 2px solid #4ed3ab; /* Match CPD note border */
@@ -312,6 +328,17 @@ textarea#personal-notes {
 .cpd-card.selected {
   background-color: #e3e3e3 !important;
   border-color: #4ed3ab;
+}
+
+.special-section-separator {
+  height: 0.2rem;
+  min-height: 0.2rem;
+  background-color: rgba(220, 220, 220, 0.8) !important;
+  border-radius: 999px !important;
+  cursor: default !important;
+  padding: 0 !important;
+  margin: var(--size-xxxsm) 0;
+  align-self: stretch;
 }
 
 .sticky-summary {
@@ -385,6 +412,7 @@ button {
 
 #note-list-pane {
   flex:2;
+  min-width: 0;
   background:var(--dark-2);
   color: var(--light);
   h2 {
@@ -404,6 +432,10 @@ button {
 
 .session-info {
   flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .payment-indicator {
@@ -431,6 +463,7 @@ button {
   transition: background-color 0.2s;
   position: relative;
   border: 1px solid transparent;
+  min-width: 0;
 }
 
 .note-assessment {
@@ -460,6 +493,7 @@ button {
 
 #editor-pane {
   flex:3;
+  min-width: 0;
   background-color: var(--dark-3);
   overflow-y: auto;
   h3 {
@@ -485,6 +519,29 @@ button {
   label{
     color: var(--light);
   }
+}
+
+/* Keep duration and paid on one row in panel 3 */
+#client-duration-paid-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-xsm);
+}
+
+#client-duration-paid-wrap > label:first-child {
+  flex: 1;
+}
+
+#client-duration-paid-wrap .checkbox-label {
+  width: auto;
+  white-space: nowrap;
+  padding-bottom: var(--size-xxxsm);
+}
+
+/* Reduce vertical gap between top fields and the main editor block */
+#note-form > .form-section:first-of-type {
+  gap: calc(var(--size-sm) / 2);
+  padding-bottom: calc(var(--size-sm) / 2);
 }
 
 #note-form[hidden] {
@@ -526,11 +583,68 @@ button {
   display: none;
 }
 
+.supervision-summary-label {
+  width: 100%;
+}
+
+.char-counter {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: var(--size-xxxsm);
+}
+
 .editor-separator {
   width: 100%;
   border: 0;
   border-top: 1px solid rgba(255, 255, 255, .35);
   margin: var(--size-sm) 0 var(--size-xxsm) 0;
+}
+
+.cpd-link-label {
+  width: 100%;
+  margin-top: var(--size-xxsm);
+}
+
+.cpd-link-anchor {
+  color: var(--primary);
+  text-decoration: underline;
+  word-break: break-all;
+  margin-top: var(--size-xxxsm);
+}
+
+.cpd-tile-title {
+  font-style: italic;
+  font-weight: 300;
+}
+
+.supervision-tile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  white-space: normal;
+  overflow: hidden;
+}
+
+.supervision-tile-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.supervision-tile-meta {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.supervision-tile-summary {
+  font-style: italic;
+  font-weight: 300;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #editor {
@@ -580,6 +694,10 @@ button {
   gap: 1rem;
   margin-top: 0.25rem;
 } 
+
+#session-type-wrap {
+  margin-top: var(--size-xxsm);
+}
 
 .checkbox-label,
 .radio-label {

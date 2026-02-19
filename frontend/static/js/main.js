@@ -58,9 +58,11 @@ window.addEventListener("load", () => {
     if (!(await confirmDiscardIfDirty())) {
       return;
     }
-    // If CPD is selected, create CPD note directly (no modal needed)
+    // If CPD/Supervision special sections are selected, create matching note directly.
     if (currentClientId === "cpd") {
       createNewNote("cpd");
+    } else if (currentClientId === "supervision") {
+      createNewNote("supervision");
     } else {
       // For clients, show the note type selection modal
       openNoteTypeModal();
@@ -80,6 +82,12 @@ window.addEventListener("load", () => {
   const noteForm = document.getElementById("note-form");
   noteForm.addEventListener("input", () => markNoteDirty());
   noteForm.addEventListener("change", () => markNoteDirty());
+  document.getElementById("note-link").addEventListener("input", (e) => {
+    updateCpdLinkAnchor(e.target.value);
+  });
+  document.getElementById("supervision-summary").addEventListener("input", (e) => {
+    updateSupervisionSummaryCounter(e.target.value);
+  });
   document.getElementById("toggle-personal-notes").addEventListener("click", () => {
     setPersonalNotesExpanded(!isPersonalNotesExpanded);
   });
@@ -106,6 +114,35 @@ function setPersonalNotesExpanded(expanded) {
   toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
   toggleButton.textContent = expanded ? "Personal Notes - Hide" : "Personal Notes - Show";
   content.classList.toggle("is-collapsed", !expanded);
+}
+
+function normalizeUrlForNavigation(rawUrl) {
+  const value = (rawUrl || "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+}
+
+function updateCpdLinkAnchor(rawUrl) {
+  const anchor = document.getElementById("note-link-anchor");
+  if (!anchor) return;
+  const normalizedUrl = normalizeUrlForNavigation(rawUrl);
+  if (!normalizedUrl) {
+    anchor.style.display = "none";
+    anchor.textContent = "";
+    anchor.href = "#";
+    return;
+  }
+  anchor.href = normalizedUrl;
+  anchor.textContent = normalizedUrl;
+  anchor.style.display = "inline";
+}
+
+function updateSupervisionSummaryCounter(value) {
+  const counter = document.getElementById("supervision-summary-counter");
+  if (!counter) return;
+  const currentLength = (value || "").length;
+  counter.textContent = `${currentLength}/100`;
 }
 
 async function fetchClients(filter = "active") {
@@ -147,11 +184,39 @@ function renderClientList(clients) {
     }
   });
 
-  // Add CPD card at the bottom only if search box is empty (excluded from search)
+  // Add Supervision + CPD cards at the bottom only if search box is empty (excluded from search)
   const searchBox = document.getElementById("client-search");
   const searchTerm = searchBox ? searchBox.value.trim() : "";
+  const currentFilter = document.getElementById("client-filter")?.value || "active";
   
-  if (searchTerm === "") {
+  if (searchTerm === "" && currentFilter !== "archived") {
+    const topSeparator = document.createElement("li");
+    topSeparator.className = "special-section-separator";
+    topSeparator.setAttribute("aria-hidden", "true");
+    list.appendChild(topSeparator);
+
+    const supervisionCard = document.createElement("li");
+    supervisionCard.className = "supervision-card";
+    supervisionCard.dataset.id = "supervision";
+
+    const supervisionNameSpan = document.createElement("span");
+    supervisionNameSpan.textContent = "Supervision";
+
+    supervisionCard.appendChild(supervisionNameSpan);
+    supervisionCard.addEventListener("click", async () => {
+      await selectSupervision();
+    });
+    list.appendChild(supervisionCard);
+
+    if (currentClientId === "supervision") {
+      supervisionCard.classList.add("selected");
+    }
+
+    const middleSeparator = document.createElement("li");
+    middleSeparator.className = "special-section-separator";
+    middleSeparator.setAttribute("aria-hidden", "true");
+    list.appendChild(middleSeparator);
+
     const cpdCard = document.createElement("li");
     cpdCard.className = "cpd-card";
     cpdCard.dataset.id = "cpd";
@@ -218,6 +283,12 @@ function clearEditorPane() {
   document.getElementById("note-title-field").value = "";
   document.getElementById("note-duration-hours").value = "1";
   document.getElementById("note-medium").value = "Online";
+  document.getElementById("note-link").value = "";
+  updateCpdLinkAnchor("");
+  document.getElementById("supervision-summary").value = "";
+  updateSupervisionSummaryCounter("");
+  const supervisionSummarySection = document.getElementById("supervision-summary-section");
+  if (supervisionSummarySection) supervisionSummarySection.style.display = "none";
   document.getElementById("personal-notes").value = "";
   const personalNotesSection = document.querySelector(".personal-notes-section");
   if (personalNotesSection) personalNotesSection.style.display = "flex";
@@ -297,20 +368,38 @@ async function selectCPD() {
   if (selectedItem) selectedItem.classList.add("selected");
 }
 
+async function selectSupervision() {
+  if (!(await confirmDiscardIfDirty())) {
+    return;
+  }
+  currentClientId = "supervision";
+  document.getElementById("client-name-header").textContent = "Supervision";
+  const addNoteButton = document.getElementById("add-note");
+  addNoteButton.style.display = "inline-flex";
+  addNoteButton.disabled = false;
+  document.getElementById("client-totals-summary").style.display = "none";
+  document.getElementById("cpd-totals-summary").style.display = "none";
+
+  clearEditorPane();
+  loadSupervisionNotes();
+
+  document.querySelectorAll("#client-list li").forEach(el => el.classList.remove("selected"));
+  const selectedItem = document.querySelector(`#client-list li[data-id="supervision"]`);
+  if (selectedItem) selectedItem.classList.add("selected");
+}
+
 async function fetchNotesForClient(clientId) {
   const list = document.getElementById("note-list");
   list.innerHTML = "";
 
-  const [sessionsRes, assessmentsRes, supervisionsRes] = await Promise.all([
+  const [sessionsRes, assessmentsRes] = await Promise.all([
     fetch(`/api/sessions/client/${clientId}`),
-    fetch(`/api/assessments/client/${clientId}`),
-    fetch(`/api/supervisions/client/${clientId}`)
+    fetch(`/api/assessments/client/${clientId}`)
   ]);
 
-  const [sessions, assessments, supervisions] = await Promise.all([
+  const [sessions, assessments] = await Promise.all([
     sessionsRes.json(),
-    assessmentsRes.json(),
-    supervisionsRes.json()
+    assessmentsRes.json()
   ]);
 
   assessments.forEach(note => {
@@ -324,12 +413,17 @@ async function fetchNotesForClient(clientId) {
     assessmentInfo.className = "session-info";
     assessmentInfo.textContent = formatNoteLabel("assessment", note.assessment_date, note.duration_minutes);
     
+    const typeBadge = document.createElement("span");
+    typeBadge.className = `session-type-badge ${(note.session_type || "Online").toLowerCase().replace(/ /g, '-')}`;
+    typeBadge.textContent = note.session_type || "Online";
+    
     // Create the payment status indicator
     const paymentIndicator = document.createElement("div");
     paymentIndicator.className = `payment-indicator ${note.is_paid ? 'paid' : 'unpaid'}`;
     paymentIndicator.title = note.is_paid ? 'Paid' : 'Unpaid';
     
     card.appendChild(assessmentInfo);
+    card.appendChild(typeBadge);
     card.appendChild(paymentIndicator);
     card.addEventListener("click", async () => {
       if (await confirmDiscardIfDirty()) {
@@ -373,25 +467,6 @@ async function fetchNotesForClient(clientId) {
     list.appendChild(card);
   });
 
-  supervisions.forEach(note => {
-    const card = document.createElement("div");
-    card.className = "note-card note-supervision";
-    card.dataset.noteId = note.id;
-    card.dataset.noteType = "supervision";
-    
-    // Create a container for the supervision info
-    const supervisionInfo = document.createElement("div");
-    supervisionInfo.className = "session-info";
-    supervisionInfo.textContent = formatNoteLabel("supervision", note.supervision_date, note.duration_minutes);
-    
-    card.appendChild(supervisionInfo);
-    card.addEventListener("click", async () => {
-      if (await confirmDiscardIfDirty()) {
-        loadNote("supervision", note);
-      }
-    });
-    list.appendChild(card);
-  });
 }
 
 async function loadNote(type, note, options = {}) {
@@ -422,7 +497,8 @@ async function loadNote(type, note, options = {}) {
   // Format date from YYYY-MM-DD to DD-MM-YYYY
   const dateStr = note[dateField];
   const formattedDate = dateStr ? dateStr.split("-").reverse().join("-") : "";
-  document.getElementById("note-title").textContent = `${capitalize(type)} on ${formattedDate}`;
+  const typeLabel = type === "cpd" ? "CPD" : capitalize(type);
+  document.getElementById("note-title").textContent = `${typeLabel} on ${formattedDate}`;
   document.getElementById("note-date").value = note[dateField];
   const clientDurationWrap = document.getElementById("client-duration-paid-wrap");
   const sessionTypeWrap = document.getElementById("session-type-wrap");
@@ -430,6 +506,7 @@ async function loadNote(type, note, options = {}) {
   const cpdFieldsBottom = document.getElementById("cpd-fields-bottom");
   const editorLabel = document.getElementById("editor-label");
   const personalNotesSection = document.querySelector(".personal-notes-section");
+  const supervisionSummarySection = document.getElementById("supervision-summary-section");
 
   if (type === "cpd") {
     clientDurationWrap.style.display = "none";
@@ -442,24 +519,36 @@ async function loadNote(type, note, options = {}) {
     document.getElementById("note-title-field").value = note.title || "";
     document.getElementById("note-duration-hours").value = note.duration_hours != null ? note.duration_hours : "1";
     document.getElementById("note-medium").value = note.medium || "Online";
+    document.getElementById("note-link").value = note.link_url || "";
+    updateCpdLinkAnchor(note.link_url || "");
+    document.getElementById("supervision-summary").value = "";
+    updateSupervisionSummaryCounter("");
+    if (supervisionSummarySection) supervisionSummarySection.style.display = "none";
     if (personalNotesSection) personalNotesSection.style.display = "none";
     document.getElementById("delete-note").style.display = "inline-flex";
   } else {
     clientDurationWrap.style.display = "";
-    if (sessionTypeWrap) sessionTypeWrap.style.display = type === "session" ? "block" : "none";
+    if (sessionTypeWrap) sessionTypeWrap.style.display = ["session", "assessment", "supervision"].includes(type) ? "block" : "none";
     cpdFieldsTop.style.display = "none";
     cpdFieldsBottom.style.display = "none";
     editorLabel.style.display = "none";
     document.getElementById("note-duration").value = note.duration_minutes || "";
     document.getElementById("note-paid").checked = note.is_paid || false;
+    document.getElementById("note-link").value = "";
+    updateCpdLinkAnchor("");
+    const summaryValue = type === "supervision" ? (note.summary || "") : "";
+    document.getElementById("supervision-summary").value = summaryValue;
+    updateSupervisionSummaryCounter(summaryValue);
+    if (supervisionSummarySection) supervisionSummarySection.style.display = type === "supervision" ? "block" : "none";
     if (personalNotesSection) personalNotesSection.style.display = "flex";
     setPersonalNotesExpanded(isPersonalNotesExpanded);
     document.getElementById("delete-note").style.display = "inline-flex";
   }
-  if (type === "session") {
+  if (["session", "assessment", "supervision"].includes(type)) {
     const radioButtons = document.getElementsByName("note-session-type");
+    const currentSessionType = note.session_type || "Online";
     for (let radio of radioButtons) {
-      if (radio.value === (note.session_type || "In-Person")) {
+      if (radio.value === currentSessionType) {
         radio.checked = true;
         break;
       }
@@ -468,7 +557,7 @@ async function loadNote(type, note, options = {}) {
   // Show/hide session type radio buttons based on note type
   const sessionTypeContainer = document.querySelector('.form-grid:has([name="note-session-type"])');
   if (sessionTypeContainer) {
-    sessionTypeContainer.style.display = type === "session" ? "block" : "none";
+    sessionTypeContainer.style.display = ["session", "assessment", "supervision"].includes(type) ? "block" : "none";
   }
   // Show/hide paid checkbox based on note type (hide for CPD)
   const paidCheckboxLabel = document.querySelector('label.checkbox-label:has(#note-paid)');
@@ -521,6 +610,7 @@ async function submitNoteUpdate(e) {
     payload.organisation = document.getElementById("note-organisation").value.trim() || "";
     payload.title = document.getElementById("note-title-field").value.trim() || "";
     payload.medium = document.getElementById("note-medium").value || "Online";
+    payload.link_url = document.getElementById("note-link").value.trim();
   } else {
     payload.personal_notes = document.getElementById("personal-notes").value;
     const duration = document.getElementById("note-duration").value;
@@ -529,9 +619,12 @@ async function submitNoteUpdate(e) {
     }
     payload.is_paid = document.getElementById("note-paid").checked;
   }
-  if (currentNoteType === "session") {
+  if (["session", "assessment", "supervision"].includes(currentNoteType)) {
     const selectedRadio = document.querySelector('input[name="note-session-type"]:checked');
-    payload.session_type = selectedRadio ? selectedRadio.value : "In-Person";
+    payload.session_type = selectedRadio ? selectedRadio.value : "Online";
+    if (currentNoteType === "supervision") {
+      payload.summary = document.getElementById("supervision-summary").value.slice(0, 100);
+    }
   }  
 
   const res = await fetch(urlMap[currentNoteType], {
@@ -555,6 +648,8 @@ async function submitNoteUpdate(e) {
     // Reload notes based on whether it's CPD or a client
     if (currentClientId === "cpd") {
       await loadCPDNotes();
+    } else if (currentClientId === "supervision") {
+      await loadSupervisionNotes();
     } else {
       await loadNotes(currentClientId);
       await updateGlobalTimeTotals();
@@ -579,13 +674,17 @@ function openNoteTypeModal() {
   // Show appropriate buttons based on whether CPD or client is selected
   const clientNoteButtons = document.getElementById("client-note-buttons");
   const cpdNoteButtons = document.getElementById("cpd-note-buttons");
+  const supervisionButton = document.getElementById("create-supervision-note");
   
   if (currentClientId === "cpd") {
     clientNoteButtons.style.display = "none";
     cpdNoteButtons.style.display = "flex";
+    if (supervisionButton) supervisionButton.style.display = "none";
   } else {
     clientNoteButtons.style.display = "flex";
     cpdNoteButtons.style.display = "none";
+    // Supervision notes are now managed only from the global Supervision section.
+    if (supervisionButton) supervisionButton.style.display = "none";
   }
   
   document.getElementById("note-type-modal").classList.remove("hidden");
@@ -597,6 +696,13 @@ function closeNoteTypeModal() {
 
 async function createNewNote(type) {
   const today = new Date().toISOString().slice(0, 10);
+  const supervisionClientId = currentClientId === "supervision"
+    ? allClients.find(c => Number.isFinite(Number(c.id)))?.id
+    : currentClientId;
+  if (type === "supervision" && !supervisionClientId) {
+    alert("Please create at least one client before adding Supervision notes.");
+    return;
+  }
   const payload = {
     content: "",
     ...(type === "session" && {
@@ -612,19 +718,23 @@ async function createNewNote(type) {
       assessment_date: today,
       duration_minutes: 50,
       is_paid: false,
+      session_type: "Online",
       personal_notes: ""
     }),
     ...(type === "supervision" && {
-      client_id: currentClientId,
+      client_id: supervisionClientId,
       supervision_date: today,
-      personal_notes: ""
+      session_type: "Online",
+      personal_notes: "",
+      summary: ""
     }),
     ...(type === "cpd" && {
       cpd_date: today,
       duration_hours: 1,
       organisation: "",
       title: "",
-      medium: "Online"
+      medium: "Online",
+      link_url: ""
     })
   };
 
@@ -655,6 +765,11 @@ async function createNewNote(type) {
       const cpdNotes = await loadCPDNotes();
       if (!newNote && Array.isArray(cpdNotes) && cpdNotes.length > 0) {
         newNote = cpdNotes[cpdNotes.length - 1];
+      }
+    } else if (currentClientId === "supervision") {
+      const supervisionNotes = await loadSupervisionNotes();
+      if (!newNote && Array.isArray(supervisionNotes) && supervisionNotes.length > 0) {
+        newNote = supervisionNotes[supervisionNotes.length - 1];
       }
     } else {
       await loadNotes(currentClientId);
@@ -812,6 +927,30 @@ function formatNoteLabel(type, date, duration) {
   return `${typeLabel} - ${formattedDate} - (${durationText})`;
 }
 
+function formatCPDNoteLabel(note) {
+  const formattedDate = formatDate(note.cpd_date);
+  const durationText = note.duration_hours !== null && note.duration_hours !== undefined
+    ? `${note.duration_hours} h`
+    : "0 h";
+  const title = (note.title || "").trim() || "Untitled";
+  return {
+    prefix: `${formattedDate} - ${durationText} - `,
+    title
+  };
+}
+
+function formatSupervisionNoteLabel(note) {
+  const formattedDate = formatDate(note.supervision_date);
+  const durationText = note.duration_minutes !== null && note.duration_minutes !== undefined
+    ? `${note.duration_minutes} min`
+    : "0 min";
+  const summary = (note.summary || "").trim() || "No summary";
+  return {
+    meta: `${formattedDate} - ${durationText}`,
+    summary
+  };
+}
+
 function formatTime(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -885,6 +1024,8 @@ async function deleteNoteByType(type, id, { actionLabel = "delete" } = {}) {
   }
   if (currentClientId === "cpd") {
     await loadCPDNotes();
+  } else if (currentClientId === "supervision") {
+    await loadSupervisionNotes();
   } else if (currentClientId) {
     await loadNotes(currentClientId);
     await updateGlobalTimeTotals();
@@ -934,19 +1075,28 @@ async function toggleArchiveStatus() {
   }
 
   try {
-    const res = await fetch(`/api/clients/${currentClientId}/archive?archive=${newStatus}`, {
-      method: "POST"
+    const res = await fetch(`/api/clients/${currentClientId}/archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archive: newStatus })
     });
 
     if (res.ok) {
       const data = await res.json();
       console.log(`Successfully ${action}ed client:`, data);
       closeModal();
+      clearSelectionAfterFilterChange();
       await fetchClients(document.getElementById("client-filter").value);
     } else {
-      const errorData = await res.json();
+      const errorData = await res.json().catch(() => ({}));
       console.error(`Failed to ${action} client:`, errorData);
-      alert(`Failed to ${action} client: ${errorData.detail || 'Unknown error'}`);
+      let detail = errorData?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(item => item.msg || JSON.stringify(item)).join("; ");
+      } else if (detail && typeof detail === "object") {
+        detail = JSON.stringify(detail);
+      }
+      alert(`Failed to ${action} client: ${detail || 'Unknown error'}`);
     }
   } catch (error) {
     console.error(`Error ${action}ing client:`, error);
@@ -1047,6 +1197,71 @@ async function loadCPDNotes() {
   }
 }
 
+async function loadSupervisionNotes() {
+  try {
+    const notes = await fetchSupervisionNotes();
+    document.getElementById("client-totals-summary").style.display = "none";
+    document.getElementById("cpd-totals-summary").style.display = "none";
+    return notes;
+  } catch (error) {
+    console.error("Error loading supervision notes:", error);
+    showError("Failed to load supervision notes");
+    return [];
+  }
+}
+
+async function fetchSupervisionNotes() {
+  const list = document.getElementById("note-list");
+  list.innerHTML = "";
+
+  const supervisionRes = await fetch(`/api/supervisions/`);
+  if (!supervisionRes.ok) {
+    const errText = await supervisionRes.text();
+    throw new Error(`Supervision fetch failed: ${supervisionRes.status} ${errText}`);
+  }
+  const supervisionNotes = await supervisionRes.json();
+
+  supervisionNotes.forEach(note => {
+    const card = document.createElement("div");
+    card.className = "note-card note-supervision";
+    card.dataset.noteId = note.id;
+    card.dataset.noteType = "supervision";
+
+    const supervisionInfo = document.createElement("div");
+    supervisionInfo.className = "session-info supervision-tile-info";
+    const supervisionLabel = formatSupervisionNoteLabel(note);
+
+    const topRow = document.createElement("div");
+    topRow.className = "supervision-tile-top-row";
+
+    const metaSpan = document.createElement("span");
+    metaSpan.className = "supervision-tile-meta";
+    metaSpan.textContent = supervisionLabel.meta;
+
+    const typeBadge = document.createElement("span");
+    typeBadge.className = `session-type-badge ${(note.session_type || "Online").toLowerCase().replace(/ /g, '-')}`;
+    typeBadge.textContent = note.session_type || "Online";
+
+    const summarySpan = document.createElement("span");
+    summarySpan.className = "supervision-tile-summary";
+    summarySpan.textContent = supervisionLabel.summary;
+
+    topRow.appendChild(metaSpan);
+    topRow.appendChild(typeBadge);
+    supervisionInfo.appendChild(topRow);
+    supervisionInfo.appendChild(summarySpan);
+    card.appendChild(supervisionInfo);
+    card.addEventListener("click", async () => {
+      if (await confirmDiscardIfDirty()) {
+        loadNote("supervision", note);
+      }
+    });
+    list.appendChild(card);
+  });
+
+  return supervisionNotes;
+}
+
 async function fetchCPDNotes() {
   const list = document.getElementById("note-list");
   list.innerHTML = "";
@@ -1067,7 +1282,12 @@ async function fetchCPDNotes() {
     // Create a container for the CPD info
     const cpdInfo = document.createElement("div");
     cpdInfo.className = "session-info";
-    cpdInfo.textContent = formatNoteLabel("cpd", note.cpd_date, note.duration_hours);
+    const cpdLabel = formatCPDNoteLabel(note);
+    cpdInfo.append(document.createTextNode(cpdLabel.prefix));
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "cpd-tile-title";
+    titleSpan.textContent = cpdLabel.title;
+    cpdInfo.appendChild(titleSpan);
     
     card.appendChild(cpdInfo);
     card.addEventListener("click", async () => {
