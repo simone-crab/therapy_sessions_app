@@ -11,6 +11,7 @@ from backend.models.base import BaseModel
 # Ensure related models are imported for SQLAlchemy relationship setup
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
+from backend.models.appointment import Appointment
 import enum
 
 class ClientStatus(enum.Enum):
@@ -70,6 +71,7 @@ class Client(BaseModel):
 
     session_notes = relationship("SessionNote", back_populates="client", cascade="all, delete")
     assessment_notes = relationship("AssessmentNote", back_populates="client", cascade="all, delete")
+    appointments = relationship("Appointment", back_populates="client", cascade="all, delete")
 
     @property
     def full_name(self):

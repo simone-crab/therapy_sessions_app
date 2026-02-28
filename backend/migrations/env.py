@@ -32,6 +32,8 @@ from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
 from backend.models.cpd_note import CPDNote
+from backend.models.appointment import Appointment
+from backend.models.appointment_exception import AppointmentException
 
 target_metadata = Base.metadata
 

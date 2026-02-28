@@ -9,6 +9,11 @@ let isNewNote = false;
 let isLoadingNote = false;
 let lastClientFilter = "active";
 let isPersonalNotesExpanded = false;
+let isCalendarMode = false;
+let calendarView = "week";
+let calendarFocusDate = new Date();
+let calendarEvents = [];
+let selectedCalendarOccurrence = null;
 
 function showError(message) {
   console.error(message);
@@ -103,6 +108,7 @@ window.addEventListener("load", () => {
 
   document.getElementById("toggle-archive-btn").addEventListener("click", toggleArchiveStatus);
   document.getElementById("delete-client-btn").addEventListener("click", deleteClient);
+  initializeCalendarUI();
   setPersonalNotesExpanded(false);
 });
 
@@ -1299,4 +1305,489 @@ async function fetchCPDNotes() {
   });
 
   return cpdNotes;
+}
+
+function initializeCalendarUI() {
+  document.getElementById("calendar-toggle")?.addEventListener("click", () => {
+    setCalendarMode(!isCalendarMode);
+  });
+  document.getElementById("calendar-today")?.addEventListener("click", () => {
+    calendarFocusDate = new Date();
+    refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  });
+  document.getElementById("calendar-prev")?.addEventListener("click", () => {
+    shiftCalendarRange(-1);
+  });
+  document.getElementById("calendar-next")?.addEventListener("click", () => {
+    shiftCalendarRange(1);
+  });
+  document.getElementById("calendar-view-week")?.addEventListener("click", () => setCalendarView("week"));
+  document.getElementById("calendar-view-month")?.addEventListener("click", () => setCalendarView("month"));
+  document.getElementById("calendar-view-year")?.addEventListener("click", () => setCalendarView("year"));
+  document.getElementById("calendar-new-appointment")?.addEventListener("click", () => openAppointmentModal());
+  document.getElementById("appointment-cancel")?.addEventListener("click", closeAppointmentModal);
+  document.getElementById("appointment-form")?.addEventListener("submit", submitAppointmentForm);
+  document.getElementById("occurrence-close")?.addEventListener("click", closeOccurrenceModal);
+  document.getElementById("occurrence-cancel")?.addEventListener("click", cancelSelectedOccurrence);
+  document.getElementById("occurrence-move")?.addEventListener("click", openMoveOccurrenceModal);
+  document.getElementById("occurrence-delete")?.addEventListener("click", openDeleteScopeModal);
+  document.getElementById("move-occurrence-cancel")?.addEventListener("click", closeMoveOccurrenceModal);
+  document.getElementById("move-occurrence-form")?.addEventListener("submit", submitMoveOccurrenceForm);
+  document.getElementById("delete-scope-cancel")?.addEventListener("click", closeDeleteScopeModal);
+  document.getElementById("delete-scope-this")?.addEventListener("click", () => deleteSelectedOccurrence("this"));
+  document.getElementById("delete-scope-future")?.addEventListener("click", () => deleteSelectedOccurrence("future"));
+  document.getElementById("delete-scope-all")?.addEventListener("click", () => deleteSelectedOccurrence("all"));
+  setCalendarView(calendarView);
+}
+
+function setCalendarMode(active) {
+  isCalendarMode = active;
+  document.getElementById("calendar-mode").classList.toggle("hidden", !active);
+  document.getElementById("calendar-header").classList.toggle("hidden", !active);
+  document.getElementById("note-header").classList.toggle("hidden", active);
+  document.getElementById("calendar-toggle").classList.toggle("is-active", active);
+  document.getElementById("note-form").hidden = active ? true : !currentNoteId;
+  if (active) {
+    refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  }
+}
+
+function setCalendarView(view) {
+  calendarView = view;
+  ["week", "month", "year"].forEach(name => {
+    document.getElementById(`calendar-view-${name}`)?.classList.toggle("is-selected", name === view);
+  });
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+}
+
+function shiftCalendarRange(direction) {
+  const next = new Date(calendarFocusDate);
+  if (calendarView === "week") {
+    next.setDate(next.getDate() + (7 * direction));
+  } else if (calendarView === "month") {
+    next.setMonth(next.getMonth() + direction);
+  } else {
+    next.setFullYear(next.getFullYear() + direction);
+  }
+  calendarFocusDate = next;
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+}
+
+function startOfWeek(date) {
+  const result = new Date(date);
+  const day = result.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  result.setDate(result.getDate() + diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function endOfWeek(date) {
+  const result = startOfWeek(date);
+  result.setDate(result.getDate() + 7);
+  return result;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+}
+
+function endOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+
+function startOfYear(date) {
+  return new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0);
+}
+
+function endOfYear(date) {
+  return new Date(date.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+}
+
+function formatLocalDateTime(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+}
+
+function formatDateInputValue(date) {
+  return formatLocalDateTime(date).slice(0, 10);
+}
+
+function formatTimeInputValue(date) {
+  return formatLocalDateTime(date).slice(11, 16);
+}
+
+function formatCalendarTime(date) {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function getCalendarVisibleRange() {
+  if (calendarView === "week") {
+    const start = startOfWeek(calendarFocusDate);
+    return { start, end: endOfWeek(calendarFocusDate) };
+  }
+  if (calendarView === "month") {
+    const monthStart = startOfMonth(calendarFocusDate);
+    const monthEnd = endOfMonth(calendarFocusDate);
+    return { start: startOfWeek(monthStart), end: endOfWeek(new Date(monthEnd.getTime() - 1000)) };
+  }
+  return { start: startOfYear(calendarFocusDate), end: endOfYear(calendarFocusDate) };
+}
+
+function updateCalendarTitle(range) {
+  const titleEl = document.getElementById("calendar-title");
+  if (!titleEl) return;
+  if (calendarView === "week") {
+    const end = new Date(range.end);
+    end.setDate(end.getDate() - 1);
+    titleEl.textContent = `${range.start.toLocaleDateString([], { day: "numeric", month: "short" })} - ${end.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}`;
+  } else if (calendarView === "month") {
+    titleEl.textContent = calendarFocusDate.toLocaleDateString([], { month: "long", year: "numeric" });
+  } else {
+    titleEl.textContent = String(calendarFocusDate.getFullYear());
+  }
+}
+
+async function refreshCalendar() {
+  if (!isCalendarMode) return;
+  const range = getCalendarVisibleRange();
+  updateCalendarTitle(range);
+  await fetchCalendarEvents(range);
+  renderCalendar(range);
+}
+
+async function fetchCalendarEvents(range) {
+  const params = new URLSearchParams({
+    start: formatLocalDateTime(range.start),
+    end: formatLocalDateTime(range.end)
+  });
+  const res = await fetch(`/api/calendar/events?${params.toString()}`);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Calendar fetch failed: ${detail}`);
+  }
+  const data = await res.json();
+  calendarEvents = data.filter(event => event.status !== "CANCELLED");
+}
+
+function renderCalendar(range) {
+  const body = document.getElementById("calendar-body");
+  if (!body) return;
+  body.innerHTML = "";
+
+  if (calendarView === "week") {
+    renderWeekCalendar(body, range);
+  } else if (calendarView === "month") {
+    renderMonthCalendar(body, range);
+  } else {
+    renderYearCalendar(body, range);
+  }
+}
+
+function renderWeekCalendar(container, range) {
+  const wrap = document.createElement("div");
+  wrap.className = "calendar-week-columns";
+
+  const gutter = document.createElement("div");
+  gutter.className = "calendar-time-gutter";
+  gutter.appendChild(document.createElement("div"));
+  for (let hour = 0; hour < 24; hour++) {
+    const label = document.createElement("div");
+    label.className = "calendar-time-label";
+    label.textContent = `${String(hour).padStart(2, "0")}:00`;
+    gutter.appendChild(label);
+  }
+  wrap.appendChild(gutter);
+
+  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    const dayDate = new Date(range.start);
+    dayDate.setDate(dayDate.getDate() + dayIndex);
+    const column = document.createElement("div");
+    column.className = "calendar-week-day";
+
+    const header = document.createElement("div");
+    header.className = "calendar-week-header-cell";
+    header.innerHTML = `<span class="calendar-day-name">${dayDate.toLocaleDateString([], { weekday: "short" })}</span><span class="calendar-day-date">${dayDate.toLocaleDateString([], { day: "numeric", month: "short" })}</span>`;
+    column.appendChild(header);
+
+    const dayBody = document.createElement("div");
+    dayBody.className = "calendar-day-body";
+
+    const slotContainer = document.createElement("div");
+    slotContainer.className = "calendar-day-column";
+    slotContainer.style.height = `${24 * 56}px`;
+
+    for (let hour = 0; hour < 24; hour++) {
+      const slot = document.createElement("div");
+      slot.className = "calendar-slot";
+      slot.dataset.day = formatDateInputValue(dayDate);
+      slot.dataset.hour = String(hour);
+      slot.addEventListener("click", () => {
+        const start = new Date(dayDate);
+        start.setHours(hour, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(start.getHours() + 1);
+        openAppointmentModal({ start, end });
+      });
+      slotContainer.appendChild(slot);
+    }
+
+    const dayEvents = calendarEvents.filter(event => {
+      const eventStart = new Date(event.start);
+      return eventStart.toDateString() === dayDate.toDateString();
+    });
+    dayEvents.forEach(event => {
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const startMinutes = eventStart.getHours() * 60 + eventStart.getMinutes();
+      const durationMinutes = Math.max(30, (eventEnd - eventStart) / 60000);
+      const block = document.createElement("button");
+      block.type = "button";
+      block.className = `calendar-event ${event.is_exception ? "is-exception" : ""}`;
+      block.style.top = `${(startMinutes / 60) * 56}px`;
+      block.style.height = `${Math.max((durationMinutes / 60) * 56, 28)}px`;
+      block.innerHTML = `<strong>${formatCalendarTime(eventStart)} - ${formatCalendarTime(eventEnd)}</strong><span>${event.client_name}</span>`;
+      block.addEventListener("click", (clickEvent) => {
+        clickEvent.stopPropagation();
+        openOccurrenceModal(event);
+      });
+      slotContainer.appendChild(block);
+    });
+
+    dayBody.appendChild(slotContainer);
+    column.appendChild(dayBody);
+    wrap.appendChild(column);
+  }
+
+  container.appendChild(wrap);
+}
+
+function renderMonthCalendar(container, range) {
+  const grid = document.createElement("div");
+  grid.className = "calendar-month-grid";
+  const monthStart = startOfMonth(calendarFocusDate);
+  const monthEnd = endOfMonth(calendarFocusDate);
+  const gridStart = startOfWeek(monthStart);
+
+  for (let i = 0; i < 42; i++) {
+    const dayDate = new Date(gridStart);
+    dayDate.setDate(dayDate.getDate() + i);
+    if (dayDate >= range.end) break;
+    const cell = document.createElement("div");
+    cell.className = `calendar-month-cell ${dayDate.getMonth() !== calendarFocusDate.getMonth() ? "is-outside" : ""}`;
+    cell.innerHTML = `<div class="calendar-month-date">${dayDate.getDate()}</div>`;
+    const dayEvents = calendarEvents.filter(event => new Date(event.start).toDateString() === dayDate.toDateString());
+    dayEvents.slice(0, 4).forEach(event => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "calendar-month-event";
+      chip.textContent = `${formatCalendarTime(new Date(event.start))} ${event.client_name}`;
+      chip.addEventListener("click", () => openOccurrenceModal(event));
+      cell.appendChild(chip);
+    });
+    if (dayEvents.length > 4) {
+      const more = document.createElement("div");
+      more.className = "calendar-month-date";
+      more.textContent = `+${dayEvents.length - 4} more`;
+      cell.appendChild(more);
+    }
+    grid.appendChild(cell);
+    if (dayDate >= monthEnd && dayDate.getDay() === 0) break;
+  }
+  container.appendChild(grid);
+}
+
+function renderYearCalendar(container) {
+  const yearGrid = document.createElement("div");
+  yearGrid.className = "calendar-year-grid";
+  const year = calendarFocusDate.getFullYear();
+
+  for (let month = 0; month < 12; month++) {
+    const monthWrap = document.createElement("div");
+    monthWrap.className = "calendar-year-month";
+    monthWrap.innerHTML = `<h4>${new Date(year, month, 1).toLocaleDateString([], { month: "long", year: "numeric" })}</h4>`;
+    const daysWrap = document.createElement("div");
+    daysWrap.className = "calendar-year-days";
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+    const gridStart = startOfWeek(monthStart);
+
+    for (let i = 0; i < 42; i++) {
+      const dayDate = new Date(gridStart);
+      dayDate.setDate(dayDate.getDate() + i);
+      const dayCell = document.createElement("div");
+      dayCell.className = "calendar-year-day";
+      dayCell.style.opacity = dayDate.getMonth() === month ? "1" : "0.4";
+      dayCell.innerHTML = `<div>${dayDate.getDate()}</div>`;
+      const dayEvents = calendarEvents.filter(event => new Date(event.start).toDateString() === dayDate.toDateString());
+      if (dayEvents.length > 0) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "calendar-year-event";
+        chip.textContent = dayEvents[0].client_name;
+        chip.addEventListener("click", () => openOccurrenceModal(dayEvents[0]));
+        dayCell.appendChild(chip);
+      }
+      daysWrap.appendChild(dayCell);
+      if (dayDate >= monthEnd && dayDate.getDay() === 0) break;
+    }
+    monthWrap.appendChild(daysWrap);
+    yearGrid.appendChild(monthWrap);
+  }
+
+  container.appendChild(yearGrid);
+}
+
+async function ensureCalendarClientOptions() {
+  const select = document.getElementById("appointment-client");
+  if (!select) return;
+  const res = await fetch("/api/clients/?filter=active");
+  const clients = await res.json();
+  select.innerHTML = clients.map(client => `<option value="${client.id}">${client.full_name}</option>`).join("");
+  return clients;
+}
+
+async function openAppointmentModal(selection = {}) {
+  const clients = await ensureCalendarClientOptions();
+  if (!clients || clients.length === 0) {
+    showError("No active clients are available for booking.");
+    return;
+  }
+  const start = selection.start || new Date();
+  const end = selection.end || new Date(start.getTime() + (60 * 60000));
+  document.getElementById("appointment-date").value = formatDateInputValue(start);
+  document.getElementById("appointment-start").value = formatTimeInputValue(start);
+  document.getElementById("appointment-end").value = formatTimeInputValue(end);
+  document.getElementById("appointment-repeat").value = "NONE";
+  document.getElementById("appointment-ends").value = "NEVER";
+  document.getElementById("appointment-modal").classList.remove("hidden");
+}
+
+function closeAppointmentModal() {
+  document.getElementById("appointment-modal").classList.add("hidden");
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  return new Date(`${dateValue}T${timeValue}:00`);
+}
+
+async function submitAppointmentForm(event) {
+  event.preventDefault();
+  const payload = {
+    client_id: parseInt(document.getElementById("appointment-client").value, 10),
+    start_datetime: formatLocalDateTime(combineDateAndTime(document.getElementById("appointment-date").value, document.getElementById("appointment-start").value)),
+    end_datetime: formatLocalDateTime(combineDateAndTime(document.getElementById("appointment-date").value, document.getElementById("appointment-end").value)),
+    timezone: "Europe/London",
+    recurrence_rule: document.getElementById("appointment-repeat").value
+  };
+  if (payload.recurrence_rule === "NONE") {
+    payload.recurrence_rule = null;
+  }
+
+  const res = await fetch("/api/calendar/appointments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showError(data.detail || "Failed to create appointment.");
+    return;
+  }
+  closeAppointmentModal();
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+}
+
+function openOccurrenceModal(occurrence) {
+  selectedCalendarOccurrence = occurrence;
+  document.getElementById("occurrence-modal-summary").textContent = `${occurrence.client_name} • ${formatCalendarTime(new Date(occurrence.start))} - ${formatCalendarTime(new Date(occurrence.end))}`;
+  document.getElementById("occurrence-modal").classList.remove("hidden");
+}
+
+function closeOccurrenceModal() {
+  document.getElementById("occurrence-modal").classList.add("hidden");
+}
+
+async function cancelSelectedOccurrence() {
+  if (!selectedCalendarOccurrence) return;
+  const res = await fetch(`/api/calendar/occurrences/${selectedCalendarOccurrence.appointment_id}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ occurrence_start_datetime: selectedCalendarOccurrence.occurrence_id.split(":").slice(1).join(":") })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showError(data.detail || "Failed to cancel occurrence.");
+    return;
+  }
+  closeOccurrenceModal();
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+}
+
+function openMoveOccurrenceModal() {
+  if (!selectedCalendarOccurrence) return;
+  const start = new Date(selectedCalendarOccurrence.start);
+  const end = new Date(selectedCalendarOccurrence.end);
+  document.getElementById("move-occurrence-date").value = formatDateInputValue(start);
+  document.getElementById("move-occurrence-start").value = formatTimeInputValue(start);
+  document.getElementById("move-occurrence-end").value = formatTimeInputValue(end);
+  document.getElementById("move-occurrence-modal").classList.remove("hidden");
+}
+
+function closeMoveOccurrenceModal() {
+  document.getElementById("move-occurrence-modal").classList.add("hidden");
+}
+
+async function submitMoveOccurrenceForm(event) {
+  event.preventDefault();
+  if (!selectedCalendarOccurrence) return;
+  const newStart = combineDateAndTime(document.getElementById("move-occurrence-date").value, document.getElementById("move-occurrence-start").value);
+  const newEnd = combineDateAndTime(document.getElementById("move-occurrence-date").value, document.getElementById("move-occurrence-end").value);
+  const res = await fetch(`/api/calendar/occurrences/${selectedCalendarOccurrence.appointment_id}/move`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      occurrence_start_datetime: selectedCalendarOccurrence.occurrence_id.split(":").slice(1).join(":"),
+      new_start_datetime: formatLocalDateTime(newStart),
+      new_end_datetime: formatLocalDateTime(newEnd)
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showError(data.detail || "Failed to move occurrence.");
+    return;
+  }
+  closeMoveOccurrenceModal();
+  closeOccurrenceModal();
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+}
+
+function openDeleteScopeModal() {
+  document.getElementById("delete-scope-modal").classList.remove("hidden");
+}
+
+function closeDeleteScopeModal() {
+  document.getElementById("delete-scope-modal").classList.add("hidden");
+}
+
+async function deleteSelectedOccurrence(scope) {
+  if (!selectedCalendarOccurrence) return;
+  const params = new URLSearchParams({ scope });
+  params.set("occurrence_start_datetime", selectedCalendarOccurrence.occurrence_id.split(":").slice(1).join(":"));
+  const res = await fetch(`/api/calendar/occurrences/${selectedCalendarOccurrence.appointment_id}?${params.toString()}`, {
+    method: "DELETE"
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showError(data.detail || "Failed to delete appointment.");
+    return;
+  }
+  closeDeleteScopeModal();
+  closeOccurrenceModal();
+  refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
 }

@@ -1,6 +1,6 @@
 {
-  "name": "therapy-app",
-  "version": "1.0.1",
+  "name": "solu-notes",
+  "version": "1.0.2",
   "main": "main.js",
   "description": "SOLU NOTES",
   "author": "Simone C.",
@@ -36,6 +36,10 @@
       {
         "from": "therapy-backend",
         "to": "therapy-backend"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
       }
     ]
   }

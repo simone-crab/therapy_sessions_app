@@ -2,6 +2,13 @@ import os
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from backend.models.base import Base
+from backend.models.client import Client  # noqa: F401
+from backend.models.session_note import SessionNote  # noqa: F401
+from backend.models.assessment_note import AssessmentNote  # noqa: F401
+from backend.models.supervision_note import SupervisionNote  # noqa: F401
+from backend.models.cpd_note import CPDNote  # noqa: F401
+from backend.models.appointment import Appointment  # noqa: F401
+from backend.models.appointment_exception import AppointmentException  # noqa: F401
 
 # Get the user's home directory
 HOME_DIR = os.path.expanduser("~")
@@ -23,6 +30,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def create_tables():
     Base.metadata.create_all(bind=engine)
     _ensure_personal_notes_columns()
+    _ensure_appointment_indexes()
 
 def _ensure_personal_notes_columns():
     inspector = inspect(engine)
@@ -48,6 +56,13 @@ def _ensure_personal_notes_columns():
             if column_name not in existing_columns:
                 default_value = "Online" if column_name == "session_type" else ""
                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} VARCHAR({size}) NOT NULL DEFAULT '{default_value}'"))
+
+def _ensure_appointment_indexes():
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_active_client "
+            "ON appointments(client_id) WHERE is_active = 1"
+        ))
 
 # Dependency for FastAPI routes
 def get_db():

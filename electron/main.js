@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, MenuItem, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, MenuItem, dialog, shell, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 
 let backendProcess;
 let mainWindow;
@@ -10,7 +11,95 @@ let isBackendStarting = false;
 let isWindowCreating = false;
 let isWaitingForBackend = false;
 let isContentLoaded = false; // Track if the main content has been loaded
+let isBackendShutdownExpected = false;
 const BACKEND_URL = 'http://127.0.0.1:8000';
+const DB_DIRECTORY_NAME = 'therapy-sessions-app';
+const DB_FILENAME = 'therapy.db';
+const BACKUP_FILE_EXTENSION = 'solubak';
+const BACKUP_FILE_MAGIC = 'SOLU_NOTES_BACKUP_V1';
+
+function getDatabasePath() {
+  return path.join(app.getPath('appData'), DB_DIRECTORY_NAME, DB_FILENAME);
+}
+
+function requestBuffer(url, { method = 'GET', timeout = 10000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(url, { method, timeout }, res => {
+      const chunks = [];
+      if (res.statusCode !== 200) {
+        let errorText = '';
+        res.setEncoding('utf8');
+        res.on('data', chunk => {
+          errorText += chunk;
+        });
+        res.on('end', () => {
+          reject(new Error(`Request failed (${res.statusCode}): ${errorText || res.statusMessage || 'Unknown error'}`));
+        });
+        return;
+      }
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+
+    request.on('error', reject);
+    request.on('timeout', () => {
+      request.destroy(new Error('Request timed out'));
+    });
+    request.end();
+  });
+}
+
+function encryptBackupBuffer(plainBuffer, password) {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.scryptSync(password, salt, 32);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plainBuffer), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  const payload = {
+    magic: BACKUP_FILE_MAGIC,
+    version: 1,
+    kdf: 'scrypt',
+    cipher: 'aes-256-gcm',
+    salt: salt.toString('base64'),
+    iv: iv.toString('base64'),
+    tag: tag.toString('base64'),
+    ciphertext: ciphertext.toString('base64')
+  };
+  return Buffer.from(JSON.stringify(payload), 'utf8');
+}
+
+function decryptBackupBuffer(encryptedBuffer, password) {
+  let payload;
+  try {
+    payload = JSON.parse(encryptedBuffer.toString('utf8'));
+  } catch (_error) {
+    throw new Error('Backup file format is invalid.');
+  }
+
+  if (payload.magic !== BACKUP_FILE_MAGIC || payload.version !== 1) {
+    throw new Error('Backup file format is not supported.');
+  }
+
+  const salt = Buffer.from(payload.salt, 'base64');
+  const iv = Buffer.from(payload.iv, 'base64');
+  const tag = Buffer.from(payload.tag, 'base64');
+  const ciphertext = Buffer.from(payload.ciphertext, 'base64');
+  const key = crypto.scryptSync(password, salt, 32);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+function validateSQLiteBuffer(buffer) {
+  const sqliteHeader = 'SQLite format 3\u0000';
+  return buffer.length >= sqliteHeader.length && buffer.subarray(0, sqliteHeader.length).toString('utf8') === sqliteHeader;
+}
+
+function buildBackupDefaultName() {
+  const isoDate = new Date().toISOString().slice(0, 10);
+  return `SOLU NOTES Backup ${isoDate}.${BACKUP_FILE_EXTENSION}`;
+}
 
 function createErrorWindow(errorMessage) {
   const errorWin = new BrowserWindow({
@@ -65,7 +154,9 @@ function createErrorWindow(errorMessage) {
 }
 
 function createLoadingScreen() {
-  const brandingPath = path.join(__dirname, 'build', 'SOLUNOTES_BRANDING_2.jpg');
+  const brandingPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'assets', 'SOLUNOTES_BRANDING_2.jpg')
+    : path.join(__dirname, 'assets', 'SOLUNOTES_BRANDING_2.jpg');
   let backgroundCss = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
   try {
     const imageBuffer = fs.readFileSync(brandingPath);
@@ -139,6 +230,355 @@ function createLoadingScreen() {
   return `data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`;
 }
 
+async function showPasswordPrompt({ title, message, actionLabel, confirmPassword = false }) {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+
+  return new Promise(resolve => {
+    const channel = `backup-password-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let settled = false;
+    const promptWindow = new BrowserWindow({
+      width: 420,
+      height: confirmPassword ? 330 : 280,
+      show: false,
+      parent: mainWindow,
+      modal: true,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+
+    const cleanup = (result = null) => {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeAllListeners(channel);
+      if (!promptWindow.isDestroyed()) {
+        promptWindow.destroy();
+      }
+      resolve(result);
+    };
+
+    ipcMain.once(channel, (_event, payload) => {
+      cleanup(payload?.password || null);
+    });
+
+    promptWindow.on('closed', () => {
+      cleanup(null);
+    });
+
+    const promptHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>${title}</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #2f2f33;
+            color: #f5f5f5;
+          }
+          h1 {
+            font-size: 20px;
+            margin: 0 0 10px;
+          }
+          p {
+            font-size: 14px;
+            margin: 0 0 18px;
+            color: rgba(255, 255, 255, 0.82);
+          }
+          label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 12px;
+          }
+          input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 6px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+          }
+          .error {
+            min-height: 18px;
+            color: #ff9c7b;
+            font-size: 12px;
+            margin: 2px 0 10px;
+          }
+          .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 18px;
+          }
+          button {
+            border: 0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            cursor: pointer;
+          }
+          .secondary {
+            background: rgba(255,255,255,0.14);
+            color: #fff;
+          }
+          .primary {
+            background: #6b6bd6;
+            color: #fff;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <form id="prompt-form">
+          <label>
+            Password
+            <input type="password" id="password" autofocus />
+          </label>
+          ${confirmPassword ? `
+          <label>
+            Confirm Password
+            <input type="password" id="confirm-password" />
+          </label>` : ''}
+          <div class="error" id="error"></div>
+          <div class="actions">
+            <button type="button" class="secondary" id="cancel">Cancel</button>
+            <button type="submit" class="primary">${actionLabel}</button>
+          </div>
+        </form>
+        <script>
+          const { ipcRenderer } = require('electron');
+          const form = document.getElementById('prompt-form');
+          const passwordInput = document.getElementById('password');
+          const confirmInput = document.getElementById('confirm-password');
+          const errorEl = document.getElementById('error');
+          document.getElementById('cancel').addEventListener('click', () => window.close());
+          form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const password = passwordInput.value || '';
+            const confirmed = confirmInput ? confirmInput.value || '' : '';
+            if (!password) {
+              errorEl.textContent = 'Password is required.';
+              return;
+            }
+            if (confirmInput && password !== confirmed) {
+              errorEl.textContent = 'Passwords do not match.';
+              return;
+            }
+            ipcRenderer.send('${channel}', { password });
+            setTimeout(() => window.close(), 0);
+          });
+        </script>
+      </body>
+      </html>
+    `;
+
+    promptWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(promptHtml)}`);
+    promptWindow.once('ready-to-show', () => promptWindow.show());
+  });
+}
+
+async function stopBackendProcessGracefully() {
+  if (!backendProcess) return;
+
+  await new Promise(resolve => {
+    const proc = backendProcess;
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      backendProcess = null;
+      resolve();
+    };
+
+    isBackendShutdownExpected = true;
+    proc.once('close', finish);
+
+    try {
+      proc.kill('SIGTERM');
+    } catch (_error) {
+      finish();
+      return;
+    }
+
+    setTimeout(() => {
+      if (settled) return;
+      try {
+        proc.kill('SIGKILL');
+      } catch (_error) {
+        // Ignore if the process already exited.
+      }
+      finish();
+    }, 4000);
+  });
+}
+
+async function createEncryptedBackup() {
+  try {
+    let { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Create Encrypted Backup',
+      defaultPath: path.join(app.getPath('documents'), buildBackupDefaultName()),
+      filters: [{ name: 'SOLU NOTES Backup', extensions: [BACKUP_FILE_EXTENSION] }]
+    });
+    if (canceled || !filePath) return;
+    if (path.extname(filePath).toLowerCase() !== `.${BACKUP_FILE_EXTENSION}`) {
+      filePath = `${filePath}.${BACKUP_FILE_EXTENSION}`;
+    }
+
+    const password = await showPasswordPrompt({
+      title: 'Create Encrypted Backup',
+      message: 'Enter a password to encrypt this backup. You will need it to restore on another computer.',
+      actionLabel: 'Create Backup',
+      confirmPassword: true
+    });
+    if (!password) return;
+
+    const snapshotBuffer = await requestBuffer(`${BACKEND_URL}/api/system/backup-snapshot`, { method: 'POST' });
+    const encryptedPayload = encryptBackupBuffer(snapshotBuffer, password);
+    fs.writeFileSync(filePath, encryptedPayload);
+
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      message: 'Encrypted backup created successfully.',
+      detail: filePath
+    });
+  } catch (error) {
+    console.error('[backup] Failed to create encrypted backup:', error);
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      message: 'Failed to create backup.',
+      detail: error.message || String(error)
+    });
+  }
+}
+
+async function restoreEncryptedBackup() {
+  let tempDbPath = null;
+  try {
+    const warning = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['Cancel', 'Restore'],
+      defaultId: 1,
+      cancelId: 0,
+      message: 'Restore from encrypted backup?',
+      detail: 'This will replace the current local database and restart SOLU NOTES.'
+    });
+    if (warning.response !== 1) return;
+
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Restore From Encrypted Backup',
+      properties: ['openFile'],
+      filters: [{ name: 'SOLU NOTES Backup', extensions: [BACKUP_FILE_EXTENSION] }]
+    });
+    if (canceled || !filePaths?.length) return;
+
+    const password = await showPasswordPrompt({
+      title: 'Restore From Encrypted Backup',
+      message: 'Enter the password used when this backup was created.',
+      actionLabel: 'Restore'
+    });
+    if (!password) return;
+
+    const encryptedPayload = fs.readFileSync(filePaths[0]);
+    const restoredDbBuffer = decryptBackupBuffer(encryptedPayload, password);
+    if (!validateSQLiteBuffer(restoredDbBuffer)) {
+      throw new Error('Decrypted backup is not a valid SQLite database.');
+    }
+
+    const dbPath = getDatabasePath();
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    tempDbPath = path.join(path.dirname(dbPath), `restore-${Date.now()}.db`);
+    fs.writeFileSync(tempDbPath, restoredDbBuffer);
+
+    await stopBackendProcessGracefully();
+
+    [dbPath, `${dbPath}-wal`, `${dbPath}-shm`].forEach(file => {
+      try {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+        }
+      } catch (error) {
+        console.warn(`[restore] Could not remove ${file}: ${error.message}`);
+      }
+    });
+
+    fs.renameSync(tempDbPath, dbPath);
+
+    await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      message: 'Backup restored successfully.',
+      detail: 'SOLU NOTES will now restart.'
+    });
+
+    app.relaunch();
+    app.exit(0);
+  } catch (error) {
+    if (tempDbPath && fs.existsSync(tempDbPath)) {
+      try {
+        fs.unlinkSync(tempDbPath);
+      } catch (_cleanupError) {
+        // Ignore cleanup failure.
+      }
+    }
+    console.error('[backup] Failed to restore encrypted backup:', error);
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      message: 'Failed to restore backup.',
+      detail: error.message || String(error)
+    });
+  }
+}
+
+function setupApplicationMenu() {
+  const isMac = process.platform === 'darwin';
+  const template = [];
+
+  if (isMac) {
+    template.push({
+      label: app.getName(),
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    });
+  }
+
+  template.push(
+    {
+      label: 'File',
+      submenu: [
+        { label: 'Create Encrypted Backup...', click: () => createEncryptedBackup() },
+        { label: 'Restore From Encrypted Backup...', click: () => restoreEncryptedBackup() },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    { label: 'Help', submenu: [] }
+  );
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
   // Prevent creating multiple windows
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -156,6 +596,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     show: true, // Show immediately
+    title: 'SOLU NOTES',
     webPreferences: {
       contextIsolation: true,
       spellcheck: true, // Enable spell checking
@@ -377,6 +818,8 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(() => {
+  app.setName('SOLU NOTES');
+  setupApplicationMenu();
   // Prevent multiple backend startups
   if (isBackendStarting) {
     return;
@@ -475,8 +918,13 @@ app.whenReady().then(() => {
   backendProcess.on('close', (code, signal) => {
     backendExited = true;
     console.log(`[backend] exited with code ${code}, signal ${signal}`);
+    backendProcess = null;
     
     // If backend exits before we detect it started, show error
+    if (isBackendShutdownExpected) {
+      console.log('[electron] Backend shutdown was expected.');
+      return;
+    }
     if (!backendStarted || code !== 0) {
       const errorMsg = `Backend process exited unexpectedly.\n\n` +
         `Exit code: ${code}\n` +
@@ -540,6 +988,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (backendProcess) {
+    isBackendShutdownExpected = true;
     backendProcess.kill();
   }
   if (process.platform !== 'darwin') app.quit();
@@ -547,6 +996,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (backendProcess) {
+    isBackendShutdownExpected = true;
     backendProcess.kill();
   }
 });
