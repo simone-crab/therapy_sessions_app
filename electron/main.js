@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, MenuItem, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, MenuItem, dialog, shell, ipcMain, screen } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -591,10 +591,17 @@ function createWindow() {
   }
   
   isWindowCreating = true;
+
+  const { workArea } = screen.getPrimaryDisplay();
+  const preferredWidth = Math.round(workArea.width * 0.78);
+  const cappedWidth = Math.min(1440, workArea.width - 120);
+  const windowWidth = Math.max(1000, Math.min(preferredWidth, cappedWidth));
   
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowWidth,
+    height: workArea.height,
+    x: workArea.x + Math.round((workArea.width - windowWidth) / 2),
+    y: workArea.y,
     show: true, // Show immediately
     title: 'SOLU NOTES',
     webPreferences: {

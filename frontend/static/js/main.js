@@ -13,6 +13,7 @@ let isCalendarMode = false;
 let calendarView = "week";
 let calendarFocusDate = new Date();
 let calendarEvents = [];
+const CALENDAR_WEEK_SLOT_HEIGHT = 56;
 let selectedCalendarOccurrence = null;
 
 function showError(message) {
@@ -1491,36 +1492,45 @@ function renderCalendar(range) {
 
 function renderWeekCalendar(container, range) {
   const wrap = document.createElement("div");
-  wrap.className = "calendar-week-columns";
+  wrap.className = "calendar-week-scroll";
+
+  const grid = document.createElement("div");
+  grid.className = "calendar-week-grid";
+
+  const timeHeader = document.createElement("div");
+  timeHeader.className = "calendar-time-header";
+  timeHeader.style.gridColumn = "1";
+  timeHeader.style.gridRow = "1";
+  grid.appendChild(timeHeader);
 
   const gutter = document.createElement("div");
   gutter.className = "calendar-time-gutter";
-  gutter.appendChild(document.createElement("div"));
+  gutter.style.gridColumn = "1";
+  gutter.style.gridRow = "2";
   for (let hour = 0; hour < 24; hour++) {
     const label = document.createElement("div");
     label.className = "calendar-time-label";
     label.textContent = `${String(hour).padStart(2, "0")}:00`;
     gutter.appendChild(label);
   }
-  wrap.appendChild(gutter);
+  grid.appendChild(gutter);
 
   for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
     const dayDate = new Date(range.start);
     dayDate.setDate(dayDate.getDate() + dayIndex);
-    const column = document.createElement("div");
-    column.className = "calendar-week-day";
 
     const header = document.createElement("div");
     header.className = "calendar-week-header-cell";
+    header.style.gridColumn = String(dayIndex + 2);
+    header.style.gridRow = "1";
     header.innerHTML = `<span class="calendar-day-name">${dayDate.toLocaleDateString([], { weekday: "short" })}</span><span class="calendar-day-date">${dayDate.toLocaleDateString([], { day: "numeric", month: "short" })}</span>`;
-    column.appendChild(header);
-
-    const dayBody = document.createElement("div");
-    dayBody.className = "calendar-day-body";
+    grid.appendChild(header);
 
     const slotContainer = document.createElement("div");
-    slotContainer.className = "calendar-day-column";
-    slotContainer.style.height = `${24 * 56}px`;
+    slotContainer.className = "calendar-week-day";
+    slotContainer.style.gridColumn = String(dayIndex + 2);
+    slotContainer.style.gridRow = "2";
+    slotContainer.style.height = `${24 * CALENDAR_WEEK_SLOT_HEIGHT}px`;
 
     for (let hour = 0; hour < 24; hour++) {
       const slot = document.createElement("div");
@@ -1549,8 +1559,8 @@ function renderWeekCalendar(container, range) {
       const block = document.createElement("button");
       block.type = "button";
       block.className = `calendar-event ${event.is_exception ? "is-exception" : ""}`;
-      block.style.top = `${(startMinutes / 60) * 56}px`;
-      block.style.height = `${Math.max((durationMinutes / 60) * 56, 28)}px`;
+      block.style.top = `${(startMinutes / 60) * CALENDAR_WEEK_SLOT_HEIGHT}px`;
+      block.style.height = `${Math.max((durationMinutes / 60) * CALENDAR_WEEK_SLOT_HEIGHT, 28)}px`;
       block.innerHTML = `<strong>${formatCalendarTime(eventStart)} - ${formatCalendarTime(eventEnd)}</strong><span>${event.client_name}</span>`;
       block.addEventListener("click", (clickEvent) => {
         clickEvent.stopPropagation();
@@ -1559,11 +1569,10 @@ function renderWeekCalendar(container, range) {
       slotContainer.appendChild(block);
     });
 
-    dayBody.appendChild(slotContainer);
-    column.appendChild(dayBody);
-    wrap.appendChild(column);
+    grid.appendChild(slotContainer);
   }
 
+  wrap.appendChild(grid);
   container.appendChild(wrap);
 }
 

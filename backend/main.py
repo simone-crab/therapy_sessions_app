@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import sys
 import traceback
+import time
 
 # Ensure errors are printed to stderr
 def print_error(msg):
@@ -19,6 +20,7 @@ except Exception as e:
     sys.exit(1)
 
 app = FastAPI(title="Therapy Session Manager", version="1.0")
+ASSET_VERSION = str(int(time.time()))
 
 # Create tables on startup
 try:
@@ -84,12 +86,12 @@ except Exception as e:
 @app.get("/", response_class=HTMLResponse)
 async def root():
     with open(os.path.join(templates_dir, "index.html")) as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(content=f.read().replace("__ASSET_VERSION__", ASSET_VERSION))
 
 @app.get("/reports", response_class=HTMLResponse)
 async def reports_page():
     with open(os.path.join(templates_dir, "reports.html")) as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(content=f.read().replace("__ASSET_VERSION__", ASSET_VERSION))
 
 # Routers
 app.include_router(clients.router, prefix="/api/clients", tags=["Clients"])
