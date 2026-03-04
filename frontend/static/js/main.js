@@ -1,4 +1,5 @@
 let quill;
+let personalNotesQuill;
 let currentClientId = null;
 let currentNoteId = null;
 let currentNoteType = "session";
@@ -22,6 +23,7 @@ function showError(message) {
 }
 
 window.addEventListener("load", () => {
+  window.ThemeManager?.init();
   const addNoteButton = document.getElementById("add-note");
   addNoteButton.style.display = "none";
   document.getElementById("client-filter").addEventListener("change", async (e) => {
@@ -40,19 +42,25 @@ window.addEventListener("load", () => {
     theme: "snow",
     modules: { toolbar: "#editor-toolbar" }
   });
+  personalNotesQuill = new Quill("#personal-notes-editor", {
+    theme: "snow",
+    modules: { toolbar: "#personal-notes-toolbar" }
+  });
 
   quill.on("text-change", (_delta, _old, source) => {
     if (source !== "user") return;
     markNoteDirty();
   });
+  personalNotesQuill.on("text-change", (_delta, _old, source) => {
+    if (source !== "user") return;
+    markNoteDirty();
+  });
   
-  // Enable spellcheck on Quill's contenteditable element
-  // Use setTimeout to ensure Quill has fully initialized
+  // Enable spellcheck on Quill contenteditable elements.
+  // Use setTimeout to ensure Quill has fully initialized.
   setTimeout(() => {
-    const editorElement = document.querySelector('#editor .ql-editor');
-    if (editorElement) {
-      editorElement.setAttribute('spellcheck', 'true');
-    }
+    applyQuillSpellcheck("#editor");
+    applyQuillSpellcheck("#personal-notes-editor");
   }, 100);
 
   fetchClients("active");
@@ -97,6 +105,8 @@ window.addEventListener("load", () => {
   document.getElementById("toggle-personal-notes").addEventListener("click", () => {
     setPersonalNotesExpanded(!isPersonalNotesExpanded);
   });
+  document.getElementById("therapist-details-cancel")?.addEventListener("click", closeTherapistDetailsModal);
+  document.getElementById("therapist-details-form")?.addEventListener("submit", submitTherapistDetails);
 
   document.getElementById("client-search").addEventListener("input", (e) => {
     const term = e.target.value.toLowerCase();
@@ -121,6 +131,32 @@ function setPersonalNotesExpanded(expanded) {
   toggleButton.setAttribute("aria-expanded", expanded ? "true" : "false");
   toggleButton.textContent = expanded ? "Personal Notes - Hide" : "Personal Notes - Show";
   content.classList.toggle("is-collapsed", !expanded);
+}
+
+function applyQuillSpellcheck(containerSelector) {
+  const editorElement = document.querySelector(`${containerSelector} .ql-editor`);
+  if (editorElement) {
+    editorElement.setAttribute("spellcheck", "true");
+  }
+}
+
+function setQuillContent(editor, value) {
+  if (!editor) return;
+  const content = value || "";
+  const looksLikeHtml = /<[a-z][\s\S]*>/i.test(content);
+  if (looksLikeHtml) {
+    editor.setText("");
+    editor.clipboard.dangerouslyPasteHTML(0, content);
+  } else {
+    editor.setText(content);
+  }
+}
+
+function getQuillHtml(editor) {
+  if (!editor) return "";
+  const plain = editor.getText().trim();
+  if (!plain) return "";
+  return editor.root.innerHTML || "";
 }
 
 function normalizeUrlForNavigation(rawUrl) {
@@ -296,7 +332,9 @@ function clearEditorPane() {
   updateSupervisionSummaryCounter("");
   const supervisionSummarySection = document.getElementById("supervision-summary-section");
   if (supervisionSummarySection) supervisionSummarySection.style.display = "none";
-  document.getElementById("personal-notes").value = "";
+  if (personalNotesQuill) {
+    personalNotesQuill.setText("");
+  }
   const personalNotesSection = document.querySelector(".personal-notes-section");
   if (personalNotesSection) personalNotesSection.style.display = "flex";
   setPersonalNotesExpanded(false);
@@ -574,8 +612,10 @@ async function loadNote(type, note, options = {}) {
   // CPD required fields: ensure form validation doesn't block when hidden
   document.getElementById("note-organisation").required = type === "cpd";
   document.getElementById("note-title-field").required = type === "cpd";
-  quill.setText(note.content || "");
-  document.getElementById("personal-notes").value = type === "cpd" ? "" : (note.personal_notes || "");
+  setQuillContent(quill, note.content || "");
+  if (personalNotesQuill) {
+    setQuillContent(personalNotesQuill, type === "cpd" ? "" : (note.personal_notes || ""));
+  }
   setLoadingNote(false);
 }
 
@@ -595,7 +635,7 @@ async function deleteNote() {
 async function submitNoteUpdate(e) {
   e.preventDefault();
   const payload = {
-    content: quill.getText()
+    content: getQuillHtml(quill)
   };
 
   const urlMap = {
@@ -619,7 +659,7 @@ async function submitNoteUpdate(e) {
     payload.medium = document.getElementById("note-medium").value || "Online";
     payload.link_url = document.getElementById("note-link").value.trim();
   } else {
-    payload.personal_notes = document.getElementById("personal-notes").value;
+    payload.personal_notes = getQuillHtml(personalNotesQuill);
     const duration = document.getElementById("note-duration").value;
     if (duration) {
       payload.duration_minutes = parseInt(duration);
@@ -1062,6 +1102,85 @@ async function updateGlobalTimeTotals() {
     document.getElementById("supervision-count").textContent = "Error";
   }
 }
+
+function setTherapistDetailsFormValues(details = {}) {
+  document.getElementById("therapist-business-name").value = details.business_name || "";
+  document.getElementById("therapist-therapy-type").value = details.therapy_type || "";
+  document.getElementById("therapist-website").value = details.website || "";
+  document.getElementById("therapist-email").value = details.email || "";
+  document.getElementById("therapist-bank").value = details.bank || "";
+  document.getElementById("therapist-sort-code").value = details.sort_code || "";
+  document.getElementById("therapist-account-number").value = details.account_number || "";
+}
+
+function closeTherapistDetailsModal() {
+  document.getElementById("therapist-details-modal")?.classList.add("hidden");
+}
+
+async function openTherapistDetailsModal() {
+  const modal = document.getElementById("therapist-details-modal");
+  if (!modal) return;
+
+  try {
+    const res = await fetch("/api/therapist-details/");
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || "Failed to load therapist details.");
+    }
+    const details = await res.json();
+    setTherapistDetailsFormValues(details);
+  } catch (error) {
+    console.error("Error loading therapist details:", error);
+    showError("Failed to load therapist details.");
+    return;
+  }
+
+  modal.classList.remove("hidden");
+}
+
+async function submitTherapistDetails(event) {
+  event.preventDefault();
+
+  const payload = {
+    business_name: document.getElementById("therapist-business-name").value.trim(),
+    therapy_type: document.getElementById("therapist-therapy-type").value.trim(),
+    website: document.getElementById("therapist-website").value.trim(),
+    email: document.getElementById("therapist-email").value.trim(),
+    bank: document.getElementById("therapist-bank").value.trim(),
+    sort_code: document.getElementById("therapist-sort-code").value.trim(),
+    account_number: document.getElementById("therapist-account-number").value.trim()
+  };
+
+  const missingFields = [
+    ["Business Name", payload.business_name],
+    ["Therapy Type", payload.therapy_type],
+    ["Email", payload.email],
+    ["Bank", payload.bank],
+    ["Sort Code", payload.sort_code],
+    ["Account Number", payload.account_number]
+  ].filter(([, value]) => !value);
+
+  if (missingFields.length > 0) {
+    showError(`Please complete required fields: ${missingFields.map(([label]) => label).join(", ")}`);
+    return;
+  }
+
+  const res = await fetch("/api/therapist-details/", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showError(data.detail || "Failed to save therapist details.");
+    return;
+  }
+
+  setTherapistDetailsFormValues(data);
+  closeTherapistDetailsModal();
+}
+
+window.openTherapistDetailsModal = openTherapistDetailsModal;
 
 function closeModal() {
   document.getElementById("client-modal").classList.add("hidden");

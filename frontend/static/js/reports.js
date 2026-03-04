@@ -29,6 +29,7 @@ const cpdHead = `
 
 // Set default date range to last 30 days
 window.addEventListener('load', async () => {
+    window.ThemeManager?.init();
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);

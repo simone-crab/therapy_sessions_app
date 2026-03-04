@@ -8,10 +8,28 @@ from backend.models.client import Client
 from typing import List, Dict, Optional
 from datetime import date
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 class ReportService:
+    _TAG_RE = re.compile(r"<[^>]+>")
+    _SPACE_RE = re.compile(r"\s+")
+
+    @staticmethod
+    def _to_plain_text(content: Optional[str]) -> str:
+        if not content:
+            return ""
+        plain = ReportService._TAG_RE.sub(" ", content)
+        plain = ReportService._SPACE_RE.sub(" ", plain).strip()
+        return plain
+
+    @staticmethod
+    def _content_preview(content: Optional[str], limit: int = 100) -> str:
+        plain = ReportService._to_plain_text(content)
+        if len(plain) > limit:
+            return plain[:limit] + "..."
+        return plain
 
     @staticmethod
     def get_client_time_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> List[Dict]:
@@ -246,7 +264,7 @@ class ReportService:
                         "id": n.id,
                         "date": n.supervision_date,
                         "summary": n.summary or "",
-                        "content_preview": n.content[:100] + "..." if n.content and len(n.content) > 100 else (n.content or ""),
+                        "content_preview": ReportService._content_preview(n.content),
                         "content": n.content or ""
                     }
                     for n in supervision_notes
@@ -383,7 +401,7 @@ class ReportService:
                     "type": "Session",
                     "client_id": client.id,
                     "client_name": f"{client.first_name} {client.last_name}",
-                    "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
+                    "content_preview": ReportService._content_preview(note.content),
                     "content": note.content or ""
                 })
             
@@ -395,7 +413,7 @@ class ReportService:
                     "type": "Assessment",
                     "client_id": client.id,
                     "client_name": f"{client.first_name} {client.last_name}",
-                    "content_preview": note.content[:100] + "..." if note.content and len(note.content) > 100 else (note.content or ""),
+                    "content_preview": ReportService._content_preview(note.content),
                     "content": note.content or ""
                 })
             
@@ -482,7 +500,7 @@ class ReportService:
                         "organisation": n.organisation or "",
                         "medium": n.medium or "",
                         "duration_hours": float(n.duration_hours or 0),
-                        "content_preview": n.content[:100] + "..." if n.content and len(n.content) > 100 else (n.content or ""),
+                        "content_preview": ReportService._content_preview(n.content),
                         "content": n.content or ""
                     }
                     for n in notes

@@ -17,6 +17,83 @@ const DB_DIRECTORY_NAME = 'therapy-sessions-app';
 const DB_FILENAME = 'therapy.db';
 const BACKUP_FILE_EXTENSION = 'solubak';
 const BACKUP_FILE_MAGIC = 'SOLU_NOTES_BACKUP_V1';
+const APP_SETTINGS_FILENAME = 'settings.json';
+const THEME_STORAGE_KEY = 'solu-notes-theme';
+let currentTheme = 'dark';
+
+function getSettingsPath() {
+  return path.join(app.getPath('userData'), APP_SETTINGS_FILENAME);
+}
+
+function readSettings() {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return {};
+    }
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (error) {
+    console.warn(`[settings] Could not read settings file: ${error.message}`);
+    return {};
+  }
+}
+
+function writeSettings(settings) {
+  try {
+    const settingsPath = getSettingsPath();
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (error) {
+    console.warn(`[settings] Could not write settings file: ${error.message}`);
+  }
+}
+
+function normalizeTheme(theme) {
+  return theme === 'light' ? 'light' : 'dark';
+}
+
+function loadPersistedTheme() {
+  const settings = readSettings();
+  return normalizeTheme(settings.theme);
+}
+
+function persistTheme(theme) {
+  const settings = readSettings();
+  settings.theme = normalizeTheme(theme);
+  writeSettings(settings);
+}
+
+function applyThemeToRenderer(windowRef, theme) {
+  if (!windowRef || windowRef.isDestroyed()) return;
+  const normalized = normalizeTheme(theme);
+  const escapedTheme = JSON.stringify(normalized);
+  const escapedStorageKey = JSON.stringify(THEME_STORAGE_KEY);
+  const script = `
+    (function () {
+      const theme = ${escapedTheme};
+      const key = ${escapedStorageKey};
+      if (window.ThemeManager && typeof window.ThemeManager.setTheme === 'function') {
+        window.ThemeManager.setTheme(theme);
+      } else {
+        document.documentElement.dataset.theme = theme;
+        try { localStorage.setItem(key, theme); } catch (_error) {}
+      }
+    })();
+  `;
+  windowRef.webContents.executeJavaScript(script).catch(error => {
+    console.warn(`[theme] Failed to apply theme in renderer: ${error.message}`);
+  });
+}
+
+function setCurrentTheme(theme, { applyToWindow = true, persist = true } = {}) {
+  currentTheme = normalizeTheme(theme);
+  if (persist) {
+    persistTheme(currentTheme);
+  }
+  if (applyToWindow) {
+    applyThemeToRenderer(mainWindow, currentTheme);
+  }
+}
 
 function getDatabasePath() {
   return path.join(app.getPath('appData'), DB_DIRECTORY_NAME, DB_FILENAME);
@@ -567,11 +644,61 @@ function setupApplicationMenu() {
         { label: 'Create Encrypted Backup...', click: () => createEncryptedBackup() },
         { label: 'Restore From Encrypted Backup...', click: () => restoreEncryptedBackup() },
         { type: 'separator' },
+        {
+          label: 'Therapist Details...',
+          click: () => {
+            if (!mainWindow || mainWindow.isDestroyed()) {
+              return;
+            }
+            mainWindow.webContents.executeJavaScript(`
+              (function () {
+                if (typeof window.openTherapistDetailsModal === 'function') {
+                  window.openTherapistDetailsModal();
+                  return true;
+                }
+                return false;
+              })();
+            `).then((opened) => {
+              if (opened) return;
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                message: 'Therapist Details is available from the main notes view.'
+              });
+            }).catch((error) => {
+              console.error('[menu] Failed to open Therapist Details modal:', error);
+            });
+          }
+        },
+        { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+        { type: 'separator' },
+        {
+          label: 'Dark Mode',
+          type: 'checkbox',
+          accelerator: 'CmdOrCtrl+Shift+D',
+          checked: currentTheme === 'dark',
+          click: (menuItem) => {
+            const nextTheme = menuItem.checked ? 'dark' : 'light';
+            setCurrentTheme(nextTheme);
+          }
+        }
+      ]
+    },
     { role: 'windowMenu' },
     { label: 'Help', submenu: [] }
   );
@@ -623,6 +750,7 @@ function createWindow() {
     if (url && (url.includes('127.0.0.1:8000') || url.includes('localhost:8000')) && !url.includes('data:text/html')) {
       console.log("✅ Main content finished loading");
       isContentLoaded = true;
+      applyThemeToRenderer(mainWindow, currentTheme);
     }
   });
   
@@ -826,6 +954,7 @@ if (!gotTheLock) {
 
 app.whenReady().then(() => {
   app.setName('SOLU NOTES');
+  currentTheme = loadPersistedTheme();
   setupApplicationMenu();
   // Prevent multiple backend startups
   if (isBackendStarting) {

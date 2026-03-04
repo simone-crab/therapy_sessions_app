@@ -9,6 +9,7 @@ from backend.models.supervision_note import SupervisionNote  # noqa: F401
 from backend.models.cpd_note import CPDNote  # noqa: F401
 from backend.models.appointment import Appointment  # noqa: F401
 from backend.models.appointment_exception import AppointmentException  # noqa: F401
+from backend.models.therapist_detail import TherapistDetail  # noqa: F401
 
 # Get the user's home directory
 HOME_DIR = os.path.expanduser("~")
