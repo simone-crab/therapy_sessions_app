@@ -90,6 +90,7 @@ window.addEventListener("load", () => {
   document.getElementById("create-supervision-note").addEventListener("click", () => createNewNote("supervision"));
   document.getElementById("create-cpd-note").addEventListener("click", () => createNewNote("cpd"));
   document.getElementById("delete-note").addEventListener("click", deleteNote);
+  document.getElementById("invoice-note").addEventListener("click", generateInvoiceForCurrentNote);
 
   document.getElementById("client-info-form").addEventListener("submit", submitClientEdit);
   document.getElementById("note-form").addEventListener("submit", submitNoteUpdate);
@@ -339,6 +340,7 @@ function clearEditorPane() {
   if (personalNotesSection) personalNotesSection.style.display = "flex";
   setPersonalNotesExpanded(false);
   document.getElementById("delete-note").style.display = "none";
+  document.getElementById("invoice-note").style.display = "none";
 
   // Reset note tracking variables
   currentNoteId = null;
@@ -589,6 +591,10 @@ async function loadNote(type, note, options = {}) {
     setPersonalNotesExpanded(isPersonalNotesExpanded);
     document.getElementById("delete-note").style.display = "inline-flex";
   }
+  const invoiceButton = document.getElementById("invoice-note");
+  if (invoiceButton) {
+    invoiceButton.style.display = ["session", "assessment"].includes(type) ? "inline-flex" : "none";
+  }
   if (["session", "assessment", "supervision"].includes(type)) {
     const radioButtons = document.getElementsByName("note-session-type");
     const currentSessionType = note.session_type || "Online";
@@ -630,6 +636,39 @@ async function deleteNote() {
   if (!deleted) return;
 
   clearEditorPane();
+}
+
+async function generateInvoiceForCurrentNote() {
+  if (!currentNoteId || !["session", "assessment"].includes(currentNoteType)) {
+    return;
+  }
+
+  const endpoint = currentNoteType === "session"
+    ? `/api/invoices/from-session/${currentNoteId}`
+    : `/api/invoices/from-assessment/${currentNoteId}`;
+
+  try {
+    const res = await fetch(endpoint, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showError(data.detail || "Failed to generate invoice.");
+      return;
+    }
+
+    const pdfUrl = data.pdf_url || (data.id ? `/api/invoices/${data.id}/pdf` : null);
+    if (!pdfUrl) {
+      showError("Invoice was created, but PDF preview URL is unavailable.");
+      return;
+    }
+
+    const opened = window.open(pdfUrl, "_blank");
+    if (!opened) {
+      window.location.href = pdfUrl;
+    }
+  } catch (error) {
+    console.error("Error generating invoice:", error);
+    showError("Failed to generate invoice.");
+  }
 }
 
 async function submitNoteUpdate(e) {
@@ -1105,12 +1144,35 @@ async function updateGlobalTimeTotals() {
 
 function setTherapistDetailsFormValues(details = {}) {
   document.getElementById("therapist-business-name").value = details.business_name || "";
+  document.getElementById("therapist-name").value = details.therapist_name || "";
+  document.getElementById("therapist-accreditation").value = details.accreditation || "";
+  document.getElementById("therapist-street").value = details.street || "";
+  document.getElementById("therapist-city").value = details.city || "";
+  document.getElementById("therapist-postcode").value = details.postcode || "";
   document.getElementById("therapist-therapy-type").value = details.therapy_type || "";
   document.getElementById("therapist-website").value = details.website || "";
   document.getElementById("therapist-email").value = details.email || "";
   document.getElementById("therapist-bank").value = details.bank || "";
+  document.getElementById("therapist-session-hourly-rate").value = details.session_hourly_rate || "";
+  document.getElementById("therapist-currency").value = details.currency || "GBP";
   document.getElementById("therapist-sort-code").value = details.sort_code || "";
   document.getElementById("therapist-account-number").value = details.account_number || "";
+}
+
+function normalizeTherapistWebsite(rawWebsite) {
+  const website = (rawWebsite || "").trim();
+  if (!website) return "";
+
+  const normalized = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+  try {
+    const parsed = new URL(normalized);
+    if (!parsed.hostname) {
+      return null;
+    }
+    return normalized;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function closeTherapistDetailsModal() {
@@ -1140,22 +1202,36 @@ async function openTherapistDetailsModal() {
 
 async function submitTherapistDetails(event) {
   event.preventDefault();
+  const websiteValue = normalizeTherapistWebsite(document.getElementById("therapist-website").value);
+  if (websiteValue === null) {
+    showError("Please enter a valid website (for example: www.mywebsite.com).");
+    return;
+  }
 
   const payload = {
     business_name: document.getElementById("therapist-business-name").value.trim(),
+    therapist_name: document.getElementById("therapist-name").value.trim(),
+    accreditation: document.getElementById("therapist-accreditation").value.trim(),
+    street: document.getElementById("therapist-street").value.trim(),
+    city: document.getElementById("therapist-city").value.trim(),
+    postcode: document.getElementById("therapist-postcode").value.trim(),
     therapy_type: document.getElementById("therapist-therapy-type").value.trim(),
-    website: document.getElementById("therapist-website").value.trim(),
+    website: websiteValue,
     email: document.getElementById("therapist-email").value.trim(),
     bank: document.getElementById("therapist-bank").value.trim(),
+    session_hourly_rate: document.getElementById("therapist-session-hourly-rate").value.trim(),
+    currency: document.getElementById("therapist-currency").value.trim().toUpperCase(),
     sort_code: document.getElementById("therapist-sort-code").value.trim(),
     account_number: document.getElementById("therapist-account-number").value.trim()
   };
 
   const missingFields = [
     ["Business Name", payload.business_name],
+    ["Therapist Name", payload.therapist_name],
     ["Therapy Type", payload.therapy_type],
     ["Email", payload.email],
     ["Bank", payload.bank],
+    ["Session/Hourly Rate", payload.session_hourly_rate],
     ["Sort Code", payload.sort_code],
     ["Account Number", payload.account_number]
   ].filter(([, value]) => !value);

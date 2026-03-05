@@ -10,6 +10,7 @@ from backend.models.cpd_note import CPDNote  # noqa: F401
 from backend.models.appointment import Appointment  # noqa: F401
 from backend.models.appointment_exception import AppointmentException  # noqa: F401
 from backend.models.therapist_detail import TherapistDetail  # noqa: F401
+from backend.models.invoice import Invoice  # noqa: F401
 
 # Get the user's home directory
 HOME_DIR = os.path.expanduser("~")
@@ -32,6 +33,8 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     _ensure_personal_notes_columns()
     _ensure_appointment_indexes()
+    _ensure_therapist_details_columns()
+    _ensure_invoice_indexes()
 
 def _ensure_personal_notes_columns():
     inspector = inspect(engine)
@@ -63,6 +66,48 @@ def _ensure_appointment_indexes():
         conn.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_active_client "
             "ON appointments(client_id) WHERE is_active = 1"
+        ))
+
+def _ensure_therapist_details_columns():
+    inspector = inspect(engine)
+    if "therapist_details" not in inspector.get_table_names():
+        return
+
+    column_specs = [
+        ("therapist_name", "VARCHAR(255) NOT NULL DEFAULT ''"),
+        ("accreditation", "VARCHAR(255) NOT NULL DEFAULT ''"),
+        ("session_hourly_rate", "VARCHAR(64) NOT NULL DEFAULT ''"),
+        ("street", "VARCHAR(255) NOT NULL DEFAULT ''"),
+        ("city", "VARCHAR(120) NOT NULL DEFAULT ''"),
+        ("postcode", "VARCHAR(32) NOT NULL DEFAULT ''"),
+        ("currency", "VARCHAR(16) NOT NULL DEFAULT 'GBP'"),
+    ]
+
+    with engine.begin() as conn:
+        existing_columns = {col["name"] for col in inspector.get_columns("therapist_details")}
+        for column_name, column_definition in column_specs:
+            if column_name not in existing_columns:
+                conn.execute(
+                    text(f"ALTER TABLE therapist_details ADD COLUMN {column_name} {column_definition}")
+                )
+
+def _ensure_invoice_indexes():
+    inspector = inspect(engine)
+    if "invoices" not in inspector.get_table_names():
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_source "
+            "ON invoices(source_type, source_id)"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_year_sequence "
+            "ON invoices(year, sequence_number)"
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_number "
+            "ON invoices(invoice_number)"
         ))
 
 # Dependency for FastAPI routes

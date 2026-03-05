@@ -304,6 +304,10 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.therapist-rate-currency-cell .form-grid {
+  gap: var(--size-xxsm);
+}
+
 .modal-actions {
   display: flex;
   justify-content: space-between;
@@ -534,6 +538,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--size-xsm);
+}
+
+.note-form-primary-actions {
+  display: flex;
+  align-items: center;
   gap: var(--size-xsm);
 }
 

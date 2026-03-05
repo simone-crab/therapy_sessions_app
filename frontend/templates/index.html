@@ -214,7 +214,10 @@
         <a id="note-link-anchor" class="cpd-link-anchor" href="#" target="_blank" rel="noopener noreferrer" style="display: none;"></a>
       </div>
       <div class="note-form-actions">
-        <button type="submit" class="primary-button">Save</button>
+        <div class="note-form-primary-actions">
+          <button type="submit" class="primary-button">Save</button>
+          <button type="button" id="invoice-note" class="secondary-button" style="display: none;">INVOICE</button>
+        </div>
         <button type="button" id="delete-note" class="danger-button" style="display: none;">Delete</button>
       </div>
       </form>
@@ -351,22 +354,47 @@
             <label class="full-width">Business Name: *
               <input type="text" id="therapist-business-name" required />
             </label>
+            <label>Therapist Name: *
+              <input type="text" id="therapist-name" required />
+            </label>
+            <label>Accreditation:
+              <input type="text" id="therapist-accreditation" />
+            </label>
+            <label class="full-width">Street:
+              <input type="text" id="therapist-street" />
+            </label>
+            <label>City:
+              <input type="text" id="therapist-city" />
+            </label>
+            <label>Postcode:
+              <input type="text" id="therapist-postcode" />
+            </label>
             <label class="full-width">Therapy Type: *
               <input type="text" id="therapist-therapy-type" required />
             </label>
             <label class="full-width">Website:
-              <input type="url" id="therapist-website" />
+              <input type="text" id="therapist-website" inputmode="url" placeholder="www.mywebsite.com" />
             </label>
             <label class="full-width">Email: *
               <input type="email" id="therapist-email" required />
             </label>
-            <label class="full-width">Bank: *
+            <label>Bank: *
               <input type="text" id="therapist-bank" required />
             </label>
-            <label class="full-width">Sort Code: *
+            <div class="therapist-rate-currency-cell">
+              <div class="form-grid cols-2">
+                <label>Session/Hourly Rate: *
+                  <input type="text" id="therapist-session-hourly-rate" required inputmode="decimal" />
+                </label>
+                <label>Currency:
+                  <input type="text" id="therapist-currency" value="GBP" placeholder="GBP" />
+                </label>
+              </div>
+            </div>
+            <label>Sort Code: *
               <input type="text" id="therapist-sort-code" required />
             </label>
-            <label class="full-width">Account Number: *
+            <label>Account Number: *
               <input type="text" id="therapist-account-number" required />
             </label>
           </div>
