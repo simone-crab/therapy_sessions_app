@@ -2,8 +2,10 @@ const { app, BrowserWindow, Menu, MenuItem, dialog, shell, ipcMain, screen } = r
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+const net = require('net');
 const fs = require('fs');
 const crypto = require('crypto');
+const { fileURLToPath } = require('url');
 
 let backendProcess;
 let mainWindow;
@@ -12,7 +14,7 @@ let isWindowCreating = false;
 let isWaitingForBackend = false;
 let isContentLoaded = false; // Track if the main content has been loaded
 let isBackendShutdownExpected = false;
-const BACKEND_URL = 'http://127.0.0.1:8000';
+let backendPort = 8000;
 const DB_DIRECTORY_NAME = 'therapy-sessions-app';
 const DB_FILENAME = 'therapy.db';
 const BACKUP_FILE_EXTENSION = 'solubak';
@@ -20,6 +22,61 @@ const BACKUP_FILE_MAGIC = 'SOLU_NOTES_BACKUP_V1';
 const APP_SETTINGS_FILENAME = 'settings.json';
 const THEME_STORAGE_KEY = 'solu-notes-theme';
 let currentTheme = 'dark';
+
+function getBackendUrl() {
+  return `http://127.0.0.1:${backendPort}`;
+}
+
+function isBackendAppUrl(url) {
+  if (!url) return false;
+  return (
+    url.startsWith(getBackendUrl()) ||
+    url.startsWith(`http://localhost:${backendPort}`)
+  );
+}
+
+function isPortAvailable(port) {
+  return new Promise(resolve => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+function findEphemeralPort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const selectedPort = address && typeof address === 'object' ? address.port : null;
+      server.close(() => {
+        if (!selectedPort) {
+          reject(new Error('Could not resolve ephemeral port.'));
+          return;
+        }
+        resolve(selectedPort);
+      });
+    });
+  });
+}
+
+async function findAvailableBackendPort(preferredPort = 8000, maxOffset = 50) {
+  if (await isPortAvailable(preferredPort)) {
+    return preferredPort;
+  }
+  for (let offset = 1; offset <= maxOffset; offset += 1) {
+    const candidate = preferredPort + offset;
+    if (await isPortAvailable(candidate)) {
+      return candidate;
+    }
+  }
+  return findEphemeralPort();
+}
 
 function getSettingsPath() {
   return path.join(app.getPath('userData'), APP_SETTINGS_FILENAME);
@@ -520,7 +577,7 @@ async function createEncryptedBackup() {
     });
     if (!password) return;
 
-    const snapshotBuffer = await requestBuffer(`${BACKEND_URL}/api/system/backup-snapshot`, { method: 'POST' });
+    const snapshotBuffer = await requestBuffer(`${getBackendUrl()}/api/system/backup-snapshot`, { method: 'POST' });
     const encryptedPayload = encryptBackupBuffer(snapshotBuffer, password);
     fs.writeFileSync(filePath, encryptedPayload);
 
@@ -747,7 +804,7 @@ function createWindow() {
   // Track when content is successfully loaded to prevent unnecessary reloads
   mainWindow.webContents.on('did-finish-load', () => {
     const url = mainWindow.webContents.getURL();
-    if (url && (url.includes('127.0.0.1:8000') || url.includes('localhost:8000')) && !url.includes('data:text/html')) {
+    if (isBackendAppUrl(url) && !url.includes('data:text/html')) {
       console.log("✅ Main content finished loading");
       isContentLoaded = true;
       applyThemeToRenderer(mainWindow, currentTheme);
@@ -774,12 +831,27 @@ function createWindow() {
     console.error(`[window] Failed to load: ${errorCode} - ${errorDescription}`);
     if (errorCode === -106) {
       // ERR_INTERNET_DISCONNECTED or connection refused
-      createErrorWindow(`Failed to connect to backend server.\n\nError: ${errorDescription}\n\nPlease ensure the backend is running on ${BACKEND_URL}`);
+      createErrorWindow(`Failed to connect to backend server.\n\nError: ${errorDescription}\n\nPlease ensure the backend is running on ${getBackendUrl()}`);
     }
   });
 
   // Open external URLs in the system browser, not inside the Electron window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^file:\/\//i.test(url)) {
+      try {
+        const localPath = fileURLToPath(url);
+        shell.openPath(localPath).then(result => {
+          if (result) {
+            console.error(`[open file] Failed to open PDF path: ${result}`);
+          }
+        }).catch(error => {
+          console.error(`[open file] Failed to open PDF path: ${error.message}`);
+        });
+      } catch (error) {
+        console.error(`[open file] Invalid file URL: ${url}`, error);
+      }
+      return { action: 'deny' };
+    }
     if (/^https?:\/\//i.test(url)) {
       shell.openExternal(url);
       return { action: 'deny' };
@@ -788,10 +860,30 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (/^file:\/\//i.test(url)) {
+      event.preventDefault();
+      try {
+        const localPath = fileURLToPath(url);
+        shell.openPath(localPath).then(result => {
+          if (result) {
+            console.error(`[open file] Failed to open PDF path: ${result}`);
+          }
+        }).catch(error => {
+          console.error(`[open file] Failed to open PDF path: ${error.message}`);
+        });
+      } catch (error) {
+        console.error(`[open file] Invalid file URL: ${url}`, error);
+      }
+      return;
+    }
+    if (/\/api\/invoices\/\d+\/pdf(?:\?|$)/i.test(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
+      return;
+    }
     const isAppUrl =
       url.startsWith('data:text/html') ||
-      url.startsWith('http://127.0.0.1:8000') ||
-      url.startsWith('http://localhost:8000');
+      isBackendAppUrl(url);
     if (!isAppUrl && /^https?:\/\//i.test(url)) {
       event.preventDefault();
       shell.openExternal(url);
@@ -868,14 +960,14 @@ function waitForBackendAndLoadContent(retries = 40) {
   
   isWaitingForBackend = true;
   
-  const request = http.get(BACKEND_URL, { timeout: 1000 }, res => {
+  const request = http.get(getBackendUrl(), { timeout: 1000 }, res => {
     if (res.statusCode === 200) {
       console.log("✅ Backend is ready. Loading content...");
       isWaitingForBackend = false;
       // Load the actual application content ONLY if not already loaded
       if (mainWindow && !mainWindow.isDestroyed() && !isContentLoaded) {
         isContentLoaded = true;
-        mainWindow.loadURL(BACKEND_URL);
+        mainWindow.loadURL(getBackendUrl());
       } else if (isContentLoaded) {
         console.log("ℹ️ Content already loaded, skipping reload");
       }
@@ -952,7 +1044,7 @@ if (!gotTheLock) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName('SOLU NOTES');
   currentTheme = loadPersistedTheme();
   setupApplicationMenu();
@@ -962,6 +1054,13 @@ app.whenReady().then(() => {
   }
   isBackendStarting = true;
   const isDev = !app.isPackaged;
+  try {
+    backendPort = await findAvailableBackendPort(8000);
+  } catch (error) {
+    console.warn(`[electron] Failed to resolve available backend port: ${error.message}. Falling back to 8000.`);
+    backendPort = 8000;
+  }
+  console.log(`[electron] Selected backend port: ${backendPort}`);
 
   // In dev, we use the binary from project dist. In production, the binary is in extraResources.
   backendPath = isDev
@@ -1011,7 +1110,8 @@ app.whenReady().then(() => {
       // Ensure Python can find its libraries if needed
       PYTHONPATH: process.env.PYTHONPATH || '',
       // Set production mode
-      PRODUCTION: 'true'
+      PRODUCTION: 'true',
+      BACKEND_PORT: String(backendPort)
     },
     detached: false
   });

@@ -661,9 +661,11 @@ async function generateInvoiceForCurrentNote() {
       return;
     }
 
-    const opened = window.open(pdfUrl, "_blank");
+    const previewUrl = new URL(pdfUrl, window.location.origin).href;
+
+    const opened = window.open(previewUrl, "_blank");
     if (!opened) {
-      window.location.href = pdfUrl;
+      window.location.href = previewUrl;
     }
   } catch (error) {
     console.error("Error generating invoice:", error);

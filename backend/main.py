@@ -108,8 +108,14 @@ app.include_router(invoices.router, prefix="/api/invoices", tags=["Invoices"])
 if __name__ == "__main__":
     try:
         import uvicorn
-        print("Starting uvicorn server...")
-        uvicorn.run(app, host="127.0.0.1", port=8000)
+        port_value = os.getenv("BACKEND_PORT", "8000")
+        try:
+            backend_port = int(port_value)
+        except ValueError:
+            print_error(f"ERROR: Invalid BACKEND_PORT value '{port_value}', falling back to 8000.")
+            backend_port = 8000
+        print(f"Starting uvicorn server on 127.0.0.1:{backend_port}...")
+        uvicorn.run(app, host="127.0.0.1", port=backend_port)
     except Exception as e:
         print_error(f"ERROR: Failed to start uvicorn server: {e}")
         print_error(traceback.format_exc())
