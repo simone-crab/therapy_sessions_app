@@ -662,9 +662,16 @@ async function generateInvoiceForCurrentNote() {
     }
 
     const previewUrl = new URL(pdfUrl, window.location.origin).href;
+    const isElectronRuntime = /Electron/i.test(navigator.userAgent || "");
+
+    if (isElectronRuntime) {
+      window.location.href = previewUrl;
+      return;
+    }
 
     const opened = window.open(previewUrl, "_blank");
     if (!opened) {
+      // Fallback for popup-blocked browsers.
       window.location.href = previewUrl;
     }
   } catch (error) {
