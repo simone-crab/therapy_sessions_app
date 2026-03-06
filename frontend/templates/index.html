@@ -14,6 +14,9 @@
       }
     })();
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/style.css?v=__ASSET_VERSION__" />
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet" />
 </head>
@@ -21,13 +24,11 @@
     <aside id="client-pane" class="client-pane pane">
       <div class="pane-header">
         <h1>Clients</h1>
-              <button id="add-client" class="primary-button">+ New Client</button>
+              <button id="add-client" class="secondary-button" aria-label="New Client" title="New Client">+</button>
 
       </div>
       <div class="client-pane-filters">
-      <input type="text" id="client-search" placeholder="Search" />
-
-      <div>
+      <div class="client-filter-row">
         <label for="client-filter">Show</label>
         <select id="client-filter">
           <option value="active">Active</option>
@@ -35,6 +36,7 @@
           <option value="all">All</option>
         </select>
       </div>
+      <input type="text" id="client-search" placeholder="Search" />
     </div>
       <ul id="client-list" class="list"></ul>
                   <a href="/reports" class="reports-link">View Reports</a>
@@ -52,7 +54,7 @@
     <section id="note-list-pane" class="pane">
       <header>
         <h2 id="client-name-header">Select a client</h2>
-        <button id="add-note" disabled class="primary-button"> + New Note</button>
+        <button id="add-note" disabled class="secondary-button"> + New Note</button>
       </header>
       <ul id="note-list" class="list"></ul>
       
@@ -78,8 +80,8 @@
         </div>
         <div id="calendar-header" class="calendar-header hidden">
           <div class="calendar-nav-group">
-            <button type="button" id="calendar-today" class="secondary-button">Today</button>
             <button type="button" id="calendar-prev" class="secondary-button" aria-label="Previous">‹</button>
+            <button type="button" id="calendar-today" class="secondary-button">Today</button>
             <button type="button" id="calendar-next" class="secondary-button" aria-label="Next">›</button>
             <h3 id="calendar-title">Calendar</h3>
           </div>
@@ -108,6 +110,9 @@
           Paid
         </label>
         </span>
+        <div class="invoice-top-wrap">
+          <button type="button" id="invoice-note" class="secondary-button" style="display: none;">INVOICE</button>
+        </div>
       </div>
       <div class="form-grid " id="session-type-wrap">
         <div class="session-type-container">
@@ -216,7 +221,6 @@
       <div class="note-form-actions">
         <div class="note-form-primary-actions">
           <button type="submit" class="primary-button">Save</button>
-          <button type="button" id="invoice-note" class="secondary-button" style="display: none;">INVOICE</button>
         </div>
         <button type="button" id="delete-note" class="danger-button" style="display: none;">Delete</button>
       </div>

@@ -1631,6 +1631,14 @@ function formatCalendarTime(date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function isSameCalendarDate(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 function getCalendarVisibleRange() {
   if (calendarView === "week") {
     const start = startOfWeek(calendarFocusDate);
@@ -1648,12 +1656,13 @@ function updateCalendarTitle(range) {
   const titleEl = document.getElementById("calendar-title");
   if (!titleEl) return;
   if (calendarView === "week") {
-    const end = new Date(range.end);
-    end.setDate(end.getDate() - 1);
-    titleEl.textContent = `${range.start.toLocaleDateString([], { day: "numeric", month: "short" })} - ${end.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}`;
+    titleEl.textContent = "";
+    titleEl.classList.add("calendar-title-hidden");
   } else if (calendarView === "month") {
+    titleEl.classList.remove("calendar-title-hidden");
     titleEl.textContent = calendarFocusDate.toLocaleDateString([], { month: "long", year: "numeric" });
   } else {
+    titleEl.classList.remove("calendar-title-hidden");
     titleEl.textContent = String(calendarFocusDate.getFullYear());
   }
 }
@@ -1722,9 +1731,10 @@ function renderWeekCalendar(container, range) {
   for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
     const dayDate = new Date(range.start);
     dayDate.setDate(dayDate.getDate() + dayIndex);
+    const isToday = isSameCalendarDate(dayDate, new Date());
 
     const header = document.createElement("div");
-    header.className = "calendar-week-header-cell";
+    header.className = `calendar-week-header-cell${isToday ? " is-today" : ""}`;
     header.style.gridColumn = String(dayIndex + 2);
     header.style.gridRow = "1";
     header.innerHTML = `<span class="calendar-day-name">${dayDate.toLocaleDateString([], { weekday: "short" })}</span><span class="calendar-day-date">${dayDate.toLocaleDateString([], { day: "numeric", month: "short" })}</span>`;
@@ -1793,7 +1803,8 @@ function renderMonthCalendar(container, range) {
     if (dayDate >= range.end) break;
     const cell = document.createElement("div");
     cell.className = `calendar-month-cell ${dayDate.getMonth() !== calendarFocusDate.getMonth() ? "is-outside" : ""}`;
-    cell.innerHTML = `<div class="calendar-month-date">${dayDate.getDate()}</div>`;
+    const isToday = isSameCalendarDate(dayDate, new Date());
+    cell.innerHTML = `<div class="calendar-month-date-number${isToday ? " is-today" : ""}">${dayDate.getDate()}</div>`;
     const dayEvents = calendarEvents.filter(event => new Date(event.start).toDateString() === dayDate.toDateString());
     dayEvents.slice(0, 4).forEach(event => {
       const chip = document.createElement("button");
@@ -1836,15 +1847,15 @@ function renderYearCalendar(container) {
       const dayCell = document.createElement("div");
       dayCell.className = "calendar-year-day";
       dayCell.style.opacity = dayDate.getMonth() === month ? "1" : "0.4";
-      dayCell.innerHTML = `<div>${dayDate.getDate()}</div>`;
+      const isToday = isSameCalendarDate(dayDate, new Date());
+      dayCell.innerHTML = `<div class="calendar-year-day-number${isToday ? " is-today" : ""}">${dayDate.getDate()}</div>`;
       const dayEvents = calendarEvents.filter(event => new Date(event.start).toDateString() === dayDate.toDateString());
       if (dayEvents.length > 0) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "calendar-year-event";
-        chip.textContent = dayEvents[0].client_name;
-        chip.addEventListener("click", () => openOccurrenceModal(dayEvents[0]));
-        dayCell.appendChild(chip);
+        dayCell.classList.add("has-events");
+        const dot = document.createElement("span");
+        dot.className = "calendar-year-dot";
+        dot.setAttribute("aria-hidden", "true");
+        dayCell.appendChild(dot);
       }
       daysWrap.appendChild(dayCell);
       if (dayDate >= monthEnd && dayDate.getDay() === 0) break;

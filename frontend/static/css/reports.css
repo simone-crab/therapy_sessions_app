@@ -1,7 +1,7 @@
 .reports-container {
-    max-width: 1200px;
+    max-width: 1180px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.75rem 2rem 2rem;
     color: var(--text-primary);
 }
 
@@ -9,7 +9,7 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 header h1 {
@@ -17,29 +17,34 @@ header h1 {
 }
 
 .nav-link {
-    color: #6366F1;
+    color: var(--primary);
     text-decoration: none;
     font-weight: 500;
+    opacity: 0.9;
+    transition: opacity 0.18s ease;
 }
 
 .nav-link:hover {
     text-decoration: underline;
+    opacity: 1;
 }
 
 .report-controls {
     background: var(--surface-bg-strong);
     border: 1px solid var(--surface-border-soft);
-    padding: 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 2rem;
+    padding: 1rem 1.1rem;
+    border-radius: 12px;
+    margin-bottom: 1.3rem;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
+    gap: 1rem;
 }
 
 .date-range {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .date-range label {
@@ -53,6 +58,7 @@ header h1 {
     color: var(--text-primary);
     background-color: var(--surface-input-bg);
     border: 1px solid var(--surface-input-border);
+    border-radius: 10px;
 }
 
 .date-range select {
@@ -60,36 +66,38 @@ header h1 {
     background-color: var(--surface-input-bg);
     border: 1px solid var(--surface-input-border);
     padding: 0.5rem;
-    border-radius: 4px;
+    border-radius: 10px;
     font-size: 0.875rem;
 }
 
 .report-actions {
     display: flex;
-    gap: 1rem;
+    gap: 0.7rem;
     align-items: center;
-    margin-left: 2rem;
+    margin-left: 1rem;
 }
 
 .report-section {
     background: var(--surface-bg-strong);
     border: 1px solid var(--surface-border-soft);
-    padding: 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 2rem;
+    padding: 1.15rem 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1.25rem;
     box-shadow: 0 1px 3px var(--shadow-color);
     color: var(--text-primary);
 }
 
 .report-section h2 {
     margin-top: 0;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    font-size: 1.15rem;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
 }
 
 .chart-container {
     height: 300px;
-    margin-bottom: 2rem;
+    margin-bottom: 1.35rem;
 }
 
 .table-container {
@@ -99,20 +107,22 @@ header h1 {
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1rem;
+    margin-top: 0.6rem;
 }
 
 th, td {
-    padding: 0.75rem;
+    padding: 0.68rem 0.7rem;
     text-align: left;
     border-bottom: 1px solid var(--surface-border-soft);
     color: var(--text-primary);
+    font-size: 0.89rem;
 }
 
 th {
     background-color: var(--surface-bg);
     font-weight: 600;
     color: var(--text-secondary);
+    letter-spacing: 0.01em;
 }
 
 tr:hover {
@@ -136,11 +146,12 @@ tr:hover {
 }
 
 .primary-button {
-    background-color: #676bbd;
+    background-color: var(--primary);
     color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    min-height: 2.3rem;
+    padding: 0.45rem 0.95rem;
     cursor: pointer;
     font-weight: 500;
 }
@@ -148,15 +159,16 @@ tr:hover {
 .secondary-button {
     background-color: var(--button-secondary-bg);
     color: var(--button-secondary-text);
-    border: none;
-    border-radius: 6px;
-    padding: 0.5rem 1rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    min-height: 2.3rem;
+    padding: 0.45rem 0.95rem;
     cursor: pointer;
     font-weight: 500;
 }
 
 .primary-button:hover {
-    background-color: #5a5fa8;
+    background-color: var(--primary-hover);
 }
 
 .secondary-button:hover {

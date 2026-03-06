@@ -959,8 +959,11 @@ function waitForBackendAndLoadContent(retries = 40) {
   }
   
   isWaitingForBackend = true;
+  let handled = false;
   
   const request = http.get(getBackendUrl(), { timeout: 1000 }, res => {
+    if (handled) return;
+    handled = true;
     if (res.statusCode === 200) {
       console.log("✅ Backend is ready. Loading content...");
       isWaitingForBackend = false;
@@ -977,6 +980,8 @@ function waitForBackendAndLoadContent(retries = 40) {
   });
 
   request.on('error', (err) => {
+    if (handled) return;
+    handled = true;
     console.error(`[http request error] ${err.message}`);
     if (err.code === 'ECONNREFUSED') {
       retry();
@@ -987,12 +992,19 @@ function waitForBackendAndLoadContent(retries = 40) {
   });
 
   request.on('timeout', () => {
+    if (handled) return;
+    handled = true;
     console.error('[http request] Timeout');
     request.destroy();
     retry();
   });
 
   function retry() {
+    // If content already loaded, any pending retry chain is stale.
+    if (isContentLoaded) {
+      isWaitingForBackend = false;
+      return;
+    }
     if (retries > 0) {
       console.log(`⏳ Waiting for backend... (${retries} retries left)`);
       setTimeout(() => {
