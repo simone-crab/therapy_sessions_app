@@ -360,7 +360,54 @@ button,
 
 .action-buttons {
   display: flex;
-  gap: var(--size-xsm)
+  gap: var(--size-xsm);
+  align-items: center;
+}
+
+.client-status-control {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.client-status-control span {
+  white-space: nowrap;
+}
+
+#modal-client-status {
+  min-inline-size: 9rem;
+  block-size: var(--button-height);
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+#client-modal .modal-header {
+  align-items: flex-start;
+}
+
+#client-modal .action-buttons {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+#client-modal .client-status-control {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  inline-size: 13rem;
+}
+
+#client-modal .client-status-control span {
+  line-height: 1.1;
+}
+
+#client-modal #modal-client-status,
+#client-modal #delete-client-btn {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .container {
@@ -736,8 +783,7 @@ button {
   line-height: 1;
 }
 
-#client-modal #toggle-archive-btn,
-#client-modal #delete-client-btn {
+#client-modal #toggle-archive-btn {
   min-inline-size: 6.75rem;
   inline-size: auto;
 }
@@ -1033,10 +1079,35 @@ button {
   width: 100%;
 }
 
+.supervision-supervisor-details-label {
+  width: 100%;
+}
+
 .char-counter {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-top: 0.1rem;
+}
+
+/* Supervision-only: remove duplicate separator under summary and tighten spacing to Personal Notes */
+#note-form[data-note-type="supervision"] #supervision-summary-section {
+  border-bottom: 0;
+  padding-bottom: var(--space-1);
+  gap: var(--space-1);
+}
+
+#note-form[data-note-type="supervision"] #supervision-summary-section .char-counter {
+  width: 100%;
+  text-align: right;
+  margin-top: 0;
+}
+
+#note-form[data-note-type="supervision"] #supervision-summary-section + #personal-notes-section {
+  margin-top: 0;
+}
+
+#note-form[data-note-type="supervision"] #supervision-summary-section + #personal-notes-section .editor-separator {
+  margin-top: var(--space-1);
 }
 
 .pane-header-inline {
@@ -1044,6 +1115,18 @@ button {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-1);
+}
+
+.note-therapy-modality {
+  margin-left: auto;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-inline-size: 48%;
+  text-align: right;
 }
 
 .calendar-toggle-button {
@@ -1164,6 +1247,195 @@ button {
 
   .calendar-header-actions {
     justify-content: flex-start;
+  }
+}
+
+.today-sessions-panel {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: min(22rem, calc(100vw - 1.8rem));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-bg-strong);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 16px 30px var(--shadow-color);
+  z-index: 160;
+  backdrop-filter: blur(8px);
+}
+
+.today-sessions-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.today-sessions-panel-title-wrap {
+  min-width: 0;
+}
+
+.today-sessions-panel-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.today-sessions-panel-date {
+  margin: 0.08rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.today-sessions-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.today-sessions-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border-soft);
+  white-space: nowrap;
+}
+
+.today-sessions-panel-dismiss {
+  width: 1.45rem;
+  height: 1.45rem;
+  min-width: 1.45rem;
+  min-height: 1.45rem;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--surface-border-soft);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.today-sessions-panel-dismiss:hover {
+  background: var(--surface-bg);
+  color: var(--text-primary);
+}
+
+.today-sessions-panel-empty {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.today-sessions-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.today-sessions-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.48rem 0.54rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-bg-soft);
+  border: 1px solid var(--surface-border-soft);
+}
+
+.today-sessions-avatar {
+  width: 1.7rem;
+  height: 1.7rem;
+  min-width: 1.7rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border-soft);
+}
+
+.today-sessions-item-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.today-sessions-item-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-sessions-item-time {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.today-sessions-item-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.25rem;
+  padding: 0.08rem 0.45rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.66rem;
+  font-weight: 600;
+  border: 1px solid var(--surface-border-soft);
+  white-space: nowrap;
+}
+
+.today-sessions-item-status.upcoming {
+  color: var(--text-primary);
+  background: var(--surface-bg);
+}
+
+.today-sessions-item-status.in-progress {
+  color: #ffffff;
+  background: rgba(243, 119, 75, 0.95);
+  border-color: transparent;
+}
+
+.today-sessions-item-status.completed {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.today-sessions-panel-more {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .today-sessions-panel {
+    width: min(18rem, calc(100vw - 1.2rem));
+    right: 0.6rem;
+    top: 0.6rem;
   }
 }
 

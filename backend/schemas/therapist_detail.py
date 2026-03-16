@@ -14,10 +14,12 @@ class TherapistDetailUpsert(BaseModel):
     website: Optional[str] = None
     email: EmailStr
     bank: str
-    session_hourly_rate: str
+    session_hourly_rate: Optional[str] = None
     currency: Optional[str] = None
     sort_code: str
     account_number: str
+    iban: Optional[str] = None
+    bic: Optional[str] = None
 
 
 class TherapistDetailResponse(BaseModel):
@@ -35,6 +37,8 @@ class TherapistDetailResponse(BaseModel):
     currency: str = "GBP"
     sort_code: str = ""
     account_number: str = ""
+    iban: str = ""
+    bic: str = ""
 
     class Config:
         from_attributes = True

@@ -32,6 +32,7 @@
         <label for="client-filter">Show</label>
         <select id="client-filter">
           <option value="active">Active</option>
+          <option value="waiting_list">Waiting List</option>
           <option value="archived">Archived</option>
           <option value="all">All</option>
         </select>
@@ -77,6 +78,7 @@
         <div id="note-header" class="pane-header-inline">
           <h3 id="note-title">Select a note</h3>
           <span id="save-status"></span>
+          <span id="note-therapy-modality" class="note-therapy-modality" style="display: none;"></span>
         </div>
         <div id="calendar-header" class="calendar-header hidden">
           <div class="calendar-nav-group">
@@ -144,6 +146,16 @@
         </label>
       </div>
     </div>
+      <div id="supervision-supervisor-details-section" class="form-section" style="display: none;">
+        <label class="supervision-supervisor-details-label">Supervisor Details:
+          <input
+            type="text"
+            id="supervision-supervisor-details"
+            name="supervision-supervisor-details"
+            placeholder="Name and surname"
+          />
+        </label>
+      </div>
         <label id="editor-label" class="editor-label" style="display: none;">Focus and Outcome</label>
       <div class="editor-container">
         <div id="editor-toolbar">
@@ -232,14 +244,37 @@
     </section>
   </div>
 
+  <section id="today-sessions-panel" class="today-sessions-panel hidden" aria-live="polite">
+    <div class="today-sessions-panel-header">
+      <div class="today-sessions-panel-title-wrap">
+        <h4 class="today-sessions-panel-title">Today's Sessions</h4>
+        <p id="today-sessions-panel-date" class="today-sessions-panel-date"></p>
+      </div>
+      <div class="today-sessions-panel-actions">
+        <span id="today-sessions-panel-badge" class="today-sessions-panel-badge"></span>
+        <button type="button" id="today-sessions-panel-dismiss" class="today-sessions-panel-dismiss" aria-label="Dismiss today's sessions panel">×</button>
+      </div>
+    </div>
+    <p id="today-sessions-panel-empty" class="today-sessions-panel-empty hidden">No sessions today</p>
+    <ul id="today-sessions-panel-list" class="today-sessions-panel-list"></ul>
+    <p id="today-sessions-panel-more" class="today-sessions-panel-more hidden"></p>
+  </section>
+
   <!-- 🔷 Client Edit Modal -->
   <div id="client-modal" class="modal hidden">
     <div class="modal-content">
       
-      <div class="modal-header">
+        <div class="modal-header">
              <h2>Edit Client Info</h2>
                 <div class="action-buttons">
-            <button type="button" id="toggle-archive-btn" class="secondary-button">Archive</button>
+            <div class="client-status-control">
+              <span>Status</span>
+              <select id="modal-client-status" aria-label="Client status">
+                <option value="active">Active</option>
+                <option value="waiting_list">Waiting List</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
             <button type="button" id="delete-client-btn" class="danger-button">Delete</button>
           </div>
         </div>
@@ -270,6 +305,26 @@
                 pattern="[A-Za-z0-9_.-]+"
                 title="Use only letters, numbers, hyphen (-), underscore (_), and dot (.)"
               />
+            </label>
+            <label>Session/Hourly Rate: *
+              <input type="text" id="modal-session-hourly-rate" required inputmode="decimal" />
+            </label>
+            <label class="full-width">Therapy Modality:
+              <select id="modal-therapy-modality">
+                <option value="">Select therapy modality (optional)</option>
+                <option value="Acceptance and Commitment Therapy (ACT)">Acceptance and Commitment Therapy (ACT)</option>
+                <option value="Cognitive Behavioral Therapy (CBT)">Cognitive Behavioral Therapy (CBT)</option>
+                <option value="Dialectical Behavior Therapy (DBT)">Dialectical Behavior Therapy (DBT)</option>
+                <option value="Eye Movement Desensitization and Reprocessing (EMDR)">Eye Movement Desensitization and Reprocessing (EMDR)</option>
+                <option value="Family Systems Therapy">Family Systems Therapy</option>
+                <option value="Gestalt Therapy">Gestalt Therapy</option>
+                <option value="Humanistic Therapy">Humanistic Therapy</option>
+                <option value="Integrative">Integrative</option>
+                <option value="Interpersonal Therapy (IPT)">Interpersonal Therapy (IPT)</option>
+                <option value="Psychodynamic Therapy">Psychodynamic Therapy</option>
+                <option value="Solution-Focused Brief Therapy (SFBT)">Solution-Focused Brief Therapy (SFBT)</option>
+                <option value="Transactional analysis (TA)">Transactional analysis (TA)</option>
+              </select>
             </label>
           </div>
         </div>
@@ -387,9 +442,6 @@
             </label>
             <div class="therapist-rate-currency-cell">
               <div class="form-grid cols-2">
-                <label>Session/Hourly Rate: *
-                  <input type="text" id="therapist-session-hourly-rate" required inputmode="decimal" />
-                </label>
                 <label>Currency:
                   <input type="text" id="therapist-currency" value="GBP" placeholder="GBP" />
                 </label>
@@ -400,6 +452,12 @@
             </label>
             <label>Account Number: *
               <input type="text" id="therapist-account-number" required />
+            </label>
+            <label>IBAN:
+              <input type="text" id="therapist-iban" />
+            </label>
+            <label>BIC:
+              <input type="text" id="therapist-bic" />
             </label>
           </div>
         </div>

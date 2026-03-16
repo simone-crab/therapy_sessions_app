@@ -31,10 +31,27 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create tables
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    _ensure_client_columns()
     _ensure_personal_notes_columns()
     _ensure_appointment_indexes()
     _ensure_therapist_details_columns()
     _ensure_invoice_indexes()
+
+def _ensure_client_columns():
+    inspector = inspect(engine)
+    if "clients" not in inspector.get_table_names():
+        return
+
+    with engine.begin() as conn:
+        existing_columns = {col["name"] for col in inspector.get_columns("clients")}
+        if "session_hourly_rate" not in existing_columns:
+            conn.execute(
+                text("ALTER TABLE clients ADD COLUMN session_hourly_rate VARCHAR(64) NOT NULL DEFAULT ''")
+            )
+        if "therapy_modality" not in existing_columns:
+            conn.execute(
+                text("ALTER TABLE clients ADD COLUMN therapy_modality VARCHAR(255)")
+            )
 
 def _ensure_personal_notes_columns():
     inspector = inspect(engine)
@@ -48,6 +65,7 @@ def _ensure_personal_notes_columns():
         ("assessment_notes", "session_type", 20),
         ("supervision_notes", "session_type", 20),
         ("supervision_notes", "summary", 100),
+        ("supervision_notes", "supervisor_details", 255),
     ]
 
     with engine.begin() as conn:
@@ -81,6 +99,8 @@ def _ensure_therapist_details_columns():
         ("city", "VARCHAR(120) NOT NULL DEFAULT ''"),
         ("postcode", "VARCHAR(32) NOT NULL DEFAULT ''"),
         ("currency", "VARCHAR(16) NOT NULL DEFAULT 'GBP'"),
+        ("iban", "VARCHAR(128) NOT NULL DEFAULT ''"),
+        ("bic", "VARCHAR(128) NOT NULL DEFAULT ''"),
     ]
 
     with engine.begin() as conn:

@@ -14,7 +14,6 @@ _REQUIRED_FIELDS = {
     "therapy_type": "Therapy Type",
     "email": "Email",
     "bank": "Bank",
-    "session_hourly_rate": "Session/Hourly Rate",
     "sort_code": "Sort Code",
     "account_number": "Account Number",
 }
@@ -33,10 +32,12 @@ def _normalize_payload(payload: TherapistDetailUpsert) -> dict:
         "website": (raw.get("website") or "").strip(),
         "email": str(raw["email"]).strip(),
         "bank": raw["bank"].strip(),
-        "session_hourly_rate": raw["session_hourly_rate"].strip(),
+        "session_hourly_rate": (raw.get("session_hourly_rate") or "").strip(),
         "currency": ((raw.get("currency") or "").strip().upper() or "GBP"),
         "sort_code": raw["sort_code"].strip(),
         "account_number": raw["account_number"].strip(),
+        "iban": (raw.get("iban") or "").strip(),
+        "bic": (raw.get("bic") or "").strip(),
     }
 
     missing = [label for key, label in _REQUIRED_FIELDS.items() if not normalized[key]]
@@ -66,6 +67,8 @@ def _to_response(data: Optional[Dict[str, Any]]) -> TherapistDetailResponse:
         currency=data.get("currency", "") or "GBP",
         sort_code=data.get("sort_code", "") or "",
         account_number=data.get("account_number", "") or "",
+        iban=data.get("iban", "") or "",
+        bic=data.get("bic", "") or "",
     )
 
 
@@ -89,6 +92,8 @@ def get_therapist_details(db: Session = Depends(get_db)):
         "currency": details.currency,
         "sort_code": details.sort_code,
         "account_number": details.account_number,
+        "iban": details.iban,
+        "bic": details.bic,
     })
 
 
@@ -111,4 +116,6 @@ def upsert_therapist_details(payload: TherapistDetailUpsert, db: Session = Depen
         "currency": details.currency,
         "sort_code": details.sort_code,
         "account_number": details.account_number,
+        "iban": details.iban,
+        "bic": details.bic,
     })

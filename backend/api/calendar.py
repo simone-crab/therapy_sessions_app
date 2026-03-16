@@ -28,6 +28,14 @@ def get_events(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/today-sessions")
+def get_today_sessions(db: Session = Depends(get_db)):
+    try:
+        return CalendarService.get_today_sessions(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/appointments")
 def create_appointment(payload: AppointmentCreate, db: Session = Depends(get_db)):
     try:

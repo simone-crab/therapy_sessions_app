@@ -57,5 +57,10 @@ def get_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
     return FileResponse(
         invoice.pdf_path,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{invoice.invoice_number}.pdf"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{invoice.invoice_number}.pdf"',
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )

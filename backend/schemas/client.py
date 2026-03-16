@@ -15,6 +15,8 @@ class ClientBase(BaseModel):
     phone: Optional[str] = Field(None, description="Phone number is required for new clients")
     date_of_birth: Optional[date] = Field(None, description="Date of birth is required for new clients")
     initial_assessment_date: Optional[date] = None
+    session_hourly_rate: Optional[str] = None
+    therapy_modality: Optional[str] = None
     address1: Optional[str] = None
     address2: Optional[str] = None
     city: Optional[str] = None
@@ -25,6 +27,7 @@ class ClientBase(BaseModel):
     gp_name: Optional[str] = None
     gp_practice: Optional[str] = None
     gp_phone: Optional[str] = None
+    status: Optional[ClientStatus] = None
 
 class ClientCreate(ClientBase):
     phone: str = Field(..., description="Phone number is required")
@@ -35,9 +38,10 @@ class ClientCreate(ClientBase):
         pattern=r"^[A-Za-z0-9_.-]+$",
         description="Client code is required and may include letters, numbers, hyphen, underscore, and dot."
     )
+    session_hourly_rate: str = Field(..., min_length=1, description="Session/Hourly Rate is required")
 
 class ClientUpdate(ClientBase):
-    status: Optional[ClientStatus] = None
+    pass
 
 class ClientResponse(ClientBase):
     id: int

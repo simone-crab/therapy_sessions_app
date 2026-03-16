@@ -25,6 +25,7 @@ class InvoiceContext:
     source_id: int
     session_date: date
     client_name: str
+    client_session_rate_raw: str
     paid: bool
 
 
@@ -51,6 +52,7 @@ class InvoiceService:
             source_id=session_note.id,
             session_date=session_note.session_date,
             client_name=session_note.client.full_name,
+            client_session_rate_raw=(session_note.client.session_hourly_rate or "").strip(),
             paid=bool(session_note.is_paid),
         )
         return InvoiceService._get_or_create(db, context)
@@ -73,6 +75,7 @@ class InvoiceService:
             source_id=assessment_note.id,
             session_date=assessment_note.assessment_date,
             client_name=assessment_note.client.full_name,
+            client_session_rate_raw=(assessment_note.client.session_hourly_rate or "").strip(),
             paid=bool(assessment_note.is_paid),
         )
         return InvoiceService._get_or_create(db, context)
@@ -88,7 +91,7 @@ class InvoiceService:
             raise ValueError("Therapist details are missing. Please complete Therapist Details first.")
 
         therapist = InvoiceService._build_therapist_payload(details)
-        rate_decimal = InvoiceService._parse_rate(therapist["session_rate_raw"])
+        rate_decimal = InvoiceService._parse_rate(context.client_session_rate_raw)
         display_amount = InvoiceService._format_decimal(rate_decimal)
         year = context.session_date.year
 
@@ -164,11 +167,12 @@ class InvoiceService:
             "therapist_name": therapist_name,
             "therapist_header": therapist_header,
             "therapist_email": (details.email or "").strip(),
-            "session_rate_raw": (details.session_hourly_rate or "").strip(),
             "currency_symbol": InvoiceService._normalize_currency_symbol(details.currency),
             "bank_name": (details.bank or "").strip(),
             "sort_code": (details.sort_code or "").strip(),
             "account_number": (details.account_number or "").strip(),
+            "iban": (getattr(details, "iban", "") or "").strip(),
+            "bic": (getattr(details, "bic", "") or "").strip(),
         }
         required = {
             "business_name": "Business Name",
@@ -178,7 +182,6 @@ class InvoiceService:
             "bank_name": "Bank",
             "sort_code": "Sort Code",
             "account_number": "Account Number",
-            "session_rate_raw": "Session/Hourly Rate",
         }
         missing = [label for key, label in required.items() if not payload.get(key)]
         if missing:
@@ -204,7 +207,7 @@ class InvoiceService:
             head, *tail = cleaned.split(".")
             cleaned = f"{head}.{''.join(tail)}"
         if not cleaned:
-            raise ValueError("Session/Hourly Rate is required in Therapist Details.")
+            raise ValueError("Session/Hourly Rate is required in Client Info.")
         try:
             amount = Decimal(cleaned)
         except InvalidOperation as exc:
@@ -219,14 +222,23 @@ class InvoiceService:
 
     @staticmethod
     def _ensure_pdf(invoice: Invoice, context: InvoiceContext, therapist: dict, amount_text: str) -> None:
-        if os.path.exists(invoice.pdf_path):
-            return
+        # Refresh existing invoices so the PDF reflects current source data
+        # (e.g., updated client session rate) while keeping the same invoice number.
         os.makedirs(os.path.dirname(invoice.pdf_path), exist_ok=True)
-        InvoiceService._generate_pdf(invoice, context, therapist, amount_text)
+        temp_path = f"{invoice.pdf_path}.tmp"
+        InvoiceService._generate_pdf(invoice, context, therapist, amount_text, output_path=temp_path)
+        os.replace(temp_path, invoice.pdf_path)
 
     @staticmethod
-    def _generate_pdf(invoice: Invoice, context: InvoiceContext, therapist: dict, amount_text: str) -> None:
-        c = canvas.Canvas(invoice.pdf_path, pagesize=A4)
+    def _generate_pdf(
+        invoice: Invoice,
+        context: InvoiceContext,
+        therapist: dict,
+        amount_text: str,
+        output_path: str | None = None,
+    ) -> None:
+        target_path = output_path or invoice.pdf_path
+        c = canvas.Canvas(target_path, pagesize=A4)
         width, height = A4
 
         left = 40
@@ -315,8 +327,9 @@ class InvoiceService:
         c.drawString(left, bacs_y - 16, f"Bank: {therapist['bank_name']}")
         c.drawString(left, bacs_y - 30, f"Sort Code: {therapist['sort_code']}")
         c.drawString(left, bacs_y - 44, f"Account Number: {therapist['account_number']}")
-        c.drawString(left, bacs_y - 58, "IBAN: ")
-        c.drawString(left, bacs_y - 72, "BIC: ")
+        c.drawString(left, bacs_y - 58, "For international payments:")
+        c.drawString(left, bacs_y - 72, f"IBAN: {therapist['iban']}")
+        c.drawString(left, bacs_y - 86, f"BIC: {therapist['bic']}")
 
         c.setFont("Helvetica-Bold", 12)
         c.drawString(left, 44, "With Thanks")

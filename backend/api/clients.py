@@ -26,7 +26,7 @@ def get_clients(filter: str = "active", db: Session = Depends(get_db)):
     Retrieve a list of clients.
 
     Args:
-        filter: Filter clients by status ("active", "archived", "all").
+        filter: Filter clients by status ("active", "waiting_list", "archived", "all").
                 Defaults to "active".
         db: Database session dependency.
 

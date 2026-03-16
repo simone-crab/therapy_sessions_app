@@ -16,6 +16,11 @@ let calendarFocusDate = new Date();
 let calendarEvents = [];
 const CALENDAR_WEEK_SLOT_HEIGHT = 56;
 let selectedCalendarOccurrence = null;
+const TODAY_SESSIONS_STORAGE_KEY = "solu-notes-today-sessions-panel-state";
+const TODAY_SESSIONS_REFRESH_MS = 60 * 1000;
+let todaySessionsState = null;
+let todaySessionsData = [];
+let todaySessionsTimerId = null;
 
 function showError(message) {
   console.error(message);
@@ -118,9 +123,10 @@ window.addEventListener("load", () => {
     renderClientList(filtered);
   });
 
-  document.getElementById("toggle-archive-btn").addEventListener("click", toggleArchiveStatus);
+  document.getElementById("toggle-archive-btn")?.addEventListener("click", toggleArchiveStatus);
   document.getElementById("delete-client-btn").addEventListener("click", deleteClient);
   initializeCalendarUI();
+  initializeTodaySessionsPanel();
   setPersonalNotesExpanded(false);
 });
 
@@ -189,6 +195,13 @@ function updateSupervisionSummaryCounter(value) {
   counter.textContent = `${currentLength}/100`;
 }
 
+function resolveClientTherapyModality(clientId) {
+  const normalizedClientId = Number(clientId);
+  if (!Number.isFinite(normalizedClientId)) return "";
+  const client = allClients.find(c => Number(c.id) === normalizedClientId);
+  return (client?.therapy_modality || "").trim();
+}
+
 async function fetchClients(filter = "active") {
   const res = await fetch(`/api/clients/?filter=${filter}`);
   allClients = await res.json();
@@ -233,7 +246,7 @@ function renderClientList(clients) {
   const searchTerm = searchBox ? searchBox.value.trim() : "";
   const currentFilter = document.getElementById("client-filter")?.value || "active";
   
-  if (searchTerm === "" && currentFilter !== "archived") {
+  if (searchTerm === "" && (currentFilter === "active" || currentFilter === "all")) {
     const topSeparator = document.createElement("li");
     topSeparator.className = "special-section-separator";
     topSeparator.setAttribute("aria-hidden", "true");
@@ -286,9 +299,15 @@ function clearEditorPane() {
   // Hide the form
   const form = document.getElementById("note-form");
   form.hidden = true;
+  form.dataset.noteType = "";
   
   // Reset note title
   document.getElementById("note-title").textContent = "Select a note";
+  const modalityLabel = document.getElementById("note-therapy-modality");
+  if (modalityLabel) {
+    modalityLabel.textContent = "";
+    modalityLabel.style.display = "none";
+  }
   
   // Clear Quill editor content
   if (quill) {
@@ -330,9 +349,12 @@ function clearEditorPane() {
   document.getElementById("note-link").value = "";
   updateCpdLinkAnchor("");
   document.getElementById("supervision-summary").value = "";
+  document.getElementById("supervision-supervisor-details").value = "";
   updateSupervisionSummaryCounter("");
   const supervisionSummarySection = document.getElementById("supervision-summary-section");
   if (supervisionSummarySection) supervisionSummarySection.style.display = "none";
+  const supervisionSupervisorDetailsSection = document.getElementById("supervision-supervisor-details-section");
+  if (supervisionSupervisorDetailsSection) supervisionSupervisorDetailsSection.style.display = "none";
   if (personalNotesQuill) {
     personalNotesQuill.setText("");
   }
@@ -517,6 +539,11 @@ async function fetchNotesForClient(clientId) {
 }
 
 async function loadNote(type, note, options = {}) {
+  if (isCalendarMode) {
+    // Selecting a note should always return Pane 3 to note mode.
+    setCalendarMode(false);
+  }
+
   // Remove selection from all notes
   document.querySelectorAll('.note-card').forEach(card => {
     card.classList.remove('selected');
@@ -531,6 +558,7 @@ async function loadNote(type, note, options = {}) {
   // Show the form
   const form = document.getElementById("note-form");
   form.hidden = false;
+  form.dataset.noteType = type;
 
   setLoadingNote(true);
   currentNoteId = note.id;
@@ -546,6 +574,22 @@ async function loadNote(type, note, options = {}) {
   const formattedDate = dateStr ? dateStr.split("-").reverse().join("-") : "";
   const typeLabel = type === "cpd" ? "CPD" : capitalize(type);
   document.getElementById("note-title").textContent = `${typeLabel} on ${formattedDate}`;
+  const modalityLabel = document.getElementById("note-therapy-modality");
+  if (modalityLabel) {
+    if (["session", "assessment"].includes(type)) {
+      const modalityText = resolveClientTherapyModality(note.client_id ?? currentClientId);
+      if (modalityText) {
+        modalityLabel.textContent = modalityText;
+        modalityLabel.style.display = "inline";
+      } else {
+        modalityLabel.textContent = "";
+        modalityLabel.style.display = "none";
+      }
+    } else {
+      modalityLabel.textContent = "";
+      modalityLabel.style.display = "none";
+    }
+  }
   document.getElementById("note-date").value = note[dateField];
   const clientDurationWrap = document.getElementById("client-duration-paid-wrap");
   const sessionTypeWrap = document.getElementById("session-type-wrap");
@@ -554,6 +598,7 @@ async function loadNote(type, note, options = {}) {
   const editorLabel = document.getElementById("editor-label");
   const personalNotesSection = document.querySelector(".personal-notes-section");
   const supervisionSummarySection = document.getElementById("supervision-summary-section");
+  const supervisionSupervisorDetailsSection = document.getElementById("supervision-supervisor-details-section");
 
   if (type === "cpd") {
     clientDurationWrap.style.display = "none";
@@ -569,8 +614,10 @@ async function loadNote(type, note, options = {}) {
     document.getElementById("note-link").value = note.link_url || "";
     updateCpdLinkAnchor(note.link_url || "");
     document.getElementById("supervision-summary").value = "";
+    document.getElementById("supervision-supervisor-details").value = "";
     updateSupervisionSummaryCounter("");
     if (supervisionSummarySection) supervisionSummarySection.style.display = "none";
+    if (supervisionSupervisorDetailsSection) supervisionSupervisorDetailsSection.style.display = "none";
     if (personalNotesSection) personalNotesSection.style.display = "none";
     document.getElementById("delete-note").style.display = "inline-flex";
   } else {
@@ -584,9 +631,12 @@ async function loadNote(type, note, options = {}) {
     document.getElementById("note-link").value = "";
     updateCpdLinkAnchor("");
     const summaryValue = type === "supervision" ? (note.summary || "") : "";
+    const supervisorDetailsValue = type === "supervision" ? (note.supervisor_details || "") : "";
     document.getElementById("supervision-summary").value = summaryValue;
+    document.getElementById("supervision-supervisor-details").value = supervisorDetailsValue;
     updateSupervisionSummaryCounter(summaryValue);
     if (supervisionSummarySection) supervisionSummarySection.style.display = type === "supervision" ? "block" : "none";
+    if (supervisionSupervisorDetailsSection) supervisionSupervisorDetailsSection.style.display = type === "supervision" ? "block" : "none";
     if (personalNotesSection) personalNotesSection.style.display = "flex";
     setPersonalNotesExpanded(isPersonalNotesExpanded);
     document.getElementById("delete-note").style.display = "inline-flex";
@@ -661,7 +711,9 @@ async function generateInvoiceForCurrentNote() {
       return;
     }
 
-    const previewUrl = new URL(pdfUrl, window.location.origin).href;
+    const previewUrlObj = new URL(pdfUrl, window.location.origin);
+    previewUrlObj.searchParams.set("ts", String(Date.now()));
+    const previewUrl = previewUrlObj.href;
     const isElectronRuntime = /Electron/i.test(navigator.userAgent || "");
 
     if (isElectronRuntime) {
@@ -719,6 +771,7 @@ async function submitNoteUpdate(e) {
     payload.session_type = selectedRadio ? selectedRadio.value : "Online";
     if (currentNoteType === "supervision") {
       payload.summary = document.getElementById("supervision-summary").value.slice(0, 100);
+      payload.supervisor_details = document.getElementById("supervision-supervisor-details").value.trim();
     }
   }  
 
@@ -821,7 +874,8 @@ async function createNewNote(type) {
       supervision_date: today,
       session_type: "Online",
       personal_notes: "",
-      summary: ""
+      summary: "",
+      supervisor_details: ""
     }),
     ...(type === "cpd" && {
       cpd_date: today,
@@ -889,10 +943,12 @@ async function createNewNote(type) {
 
 function openClientPrompt() {
   currentClientId = null;  // Reset the current client ID
-  document.getElementById("client-modal").classList.remove("hidden");
+  const clientModal = document.getElementById("client-modal");
+  clientModal.classList.remove("hidden");
+  resetClientModalScroll();
   document.getElementById("client-info-form").reset();
   document.getElementById("modal-client-code").required = true;
-  document.getElementById("toggle-archive-btn").style.display = "none";
+  document.getElementById("modal-client-status").value = "active";
   document.getElementById("delete-client-btn").style.display = "none";
 }
 
@@ -914,6 +970,9 @@ async function openEditModal(clientId) {
     document.getElementById("modal-dob").value = client.date_of_birth || "";
     document.getElementById("modal-assessment-date").value = client.initial_assessment_date || "";
     document.getElementById("modal-client-code").value = client.client_code || "";
+    document.getElementById("modal-session-hourly-rate").value = client.session_hourly_rate || "";
+    document.getElementById("modal-therapy-modality").value = client.therapy_modality || "";
+    document.getElementById("modal-client-status").value = client.status || "active";
     document.getElementById("modal-address1").value = client.address1 || "";
     document.getElementById("modal-address2").value = client.address2 || "";
     document.getElementById("modal-city").value = client.city || "";
@@ -925,12 +984,11 @@ async function openEditModal(clientId) {
     document.getElementById("modal-gp-practice").value = client.gp_practice || "";
     document.getElementById("modal-gp-phone").value = client.gp_phone || "";
 
-    document.getElementById("toggle-archive-btn").style.display = "block";
     document.getElementById("delete-client-btn").style.display = "block";
-    document.getElementById("toggle-archive-btn").textContent = client.status === "active" ? "Archive" : "Unarchive";
 
     document.getElementById("modal-client-code").required = false;
     document.getElementById("client-modal").classList.remove("hidden");
+    resetClientModalScroll();
   } catch (error) {
     console.error("Error loading client details:", error);
     alert("Failed to load client details. Please try again.");
@@ -941,8 +999,14 @@ async function submitClientEdit(e) {
   e.preventDefault();
   
   const clientCodeInput = document.getElementById("modal-client-code").value.trim();
+  const sessionHourlyRateInput = document.getElementById("modal-session-hourly-rate").value.trim();
+  const initialAssessmentDateInput = document.getElementById("modal-assessment-date").value.trim();
   if (!currentClientId && !clientCodeInput) {
     alert("Client Code is required for new clients.");
+    return;
+  }
+  if (!sessionHourlyRateInput) {
+    alert("Session/Hourly Rate is required.");
     return;
   }
   if (clientCodeInput && !/^[A-Za-z0-9_.-]+$/.test(clientCodeInput)) {
@@ -957,7 +1021,10 @@ async function submitClientEdit(e) {
     email: document.getElementById("modal-email").value,
     phone: document.getElementById("modal-phone").value,
     date_of_birth: document.getElementById("modal-dob").value,
-    initial_assessment_date: document.getElementById("modal-assessment-date").value,
+    initial_assessment_date: initialAssessmentDateInput || null,
+    session_hourly_rate: sessionHourlyRateInput,
+    therapy_modality: document.getElementById("modal-therapy-modality").value || null,
+    status: document.getElementById("modal-client-status").value || "active",
     address1: document.getElementById("modal-address1").value,
     address2: document.getElementById("modal-address2").value,
     city: document.getElementById("modal-city").value,
@@ -984,8 +1051,14 @@ async function submitClientEdit(e) {
     if (res.ok) {
       const data = await res.json();
       console.log("Client save successful:", data);
+      const selectedFilter = document.getElementById("client-filter").value;
+      const existingClient = currentClientId ? allClients.find(c => c.id === currentClientId) : null;
+      const statusChanged = Boolean(existingClient && existingClient.status !== data.status);
       closeModal();
-      await fetchClients(document.getElementById("client-filter").value);
+      if (statusChanged && selectedFilter !== "all" && selectedFilter !== data.status) {
+        clearSelectionAfterFilterChange();
+      }
+      await fetchClients(selectedFilter);
     } else {
       const errorData = await res.json();
       console.error("Failed to save client:", {
@@ -1162,10 +1235,11 @@ function setTherapistDetailsFormValues(details = {}) {
   document.getElementById("therapist-website").value = details.website || "";
   document.getElementById("therapist-email").value = details.email || "";
   document.getElementById("therapist-bank").value = details.bank || "";
-  document.getElementById("therapist-session-hourly-rate").value = details.session_hourly_rate || "";
   document.getElementById("therapist-currency").value = details.currency || "GBP";
   document.getElementById("therapist-sort-code").value = details.sort_code || "";
   document.getElementById("therapist-account-number").value = details.account_number || "";
+  document.getElementById("therapist-iban").value = details.iban || "";
+  document.getElementById("therapist-bic").value = details.bic || "";
 }
 
 function normalizeTherapistWebsite(rawWebsite) {
@@ -1228,10 +1302,11 @@ async function submitTherapistDetails(event) {
     website: websiteValue,
     email: document.getElementById("therapist-email").value.trim(),
     bank: document.getElementById("therapist-bank").value.trim(),
-    session_hourly_rate: document.getElementById("therapist-session-hourly-rate").value.trim(),
     currency: document.getElementById("therapist-currency").value.trim().toUpperCase(),
     sort_code: document.getElementById("therapist-sort-code").value.trim(),
-    account_number: document.getElementById("therapist-account-number").value.trim()
+    account_number: document.getElementById("therapist-account-number").value.trim(),
+    iban: document.getElementById("therapist-iban").value.trim(),
+    bic: document.getElementById("therapist-bic").value.trim()
   };
 
   const missingFields = [
@@ -1240,7 +1315,6 @@ async function submitTherapistDetails(event) {
     ["Therapy Type", payload.therapy_type],
     ["Email", payload.email],
     ["Bank", payload.bank],
-    ["Session/Hourly Rate", payload.session_hourly_rate],
     ["Sort Code", payload.sort_code],
     ["Account Number", payload.account_number]
   ].filter(([, value]) => !value);
@@ -1270,6 +1344,23 @@ window.openTherapistDetailsModal = openTherapistDetailsModal;
 function closeModal() {
   document.getElementById("client-modal").classList.add("hidden");
   currentClientDetails = null;
+}
+
+function resetClientModalScroll() {
+  const modal = document.getElementById("client-modal");
+  if (!modal) return;
+  const modalContent = modal.querySelector(".modal-content");
+  modal.scrollTop = 0;
+  if (modalContent) {
+    modalContent.scrollTop = 0;
+  }
+  // Ensure top anchoring after layout settles.
+  requestAnimationFrame(() => {
+    modal.scrollTop = 0;
+    if (modalContent) {
+      modalContent.scrollTop = 0;
+    }
+  });
 }
 
 async function toggleArchiveStatus() {
@@ -1639,6 +1730,302 @@ function isSameCalendarDate(a, b) {
   );
 }
 
+function buildTodaySessionsDefaultState(dayKey) {
+  return {
+    dayKey,
+    dismissed: false,
+    emptyShown: false,
+    pendingReshowStart: null,
+    reshowTriggeredStarts: []
+  };
+}
+
+function getTodaySessionsDayKey(date = new Date()) {
+  return formatDateInputValue(date);
+}
+
+function persistTodaySessionsState() {
+  if (!todaySessionsState) return;
+  try {
+    localStorage.setItem(TODAY_SESSIONS_STORAGE_KEY, JSON.stringify(todaySessionsState));
+  } catch (_error) {
+    // Ignore storage failures in restricted environments.
+  }
+}
+
+function ensureTodaySessionsState() {
+  const dayKey = getTodaySessionsDayKey();
+  const fallback = buildTodaySessionsDefaultState(dayKey);
+  try {
+    const stored = localStorage.getItem(TODAY_SESSIONS_STORAGE_KEY);
+    if (!stored) {
+      todaySessionsState = fallback;
+      persistTodaySessionsState();
+      return todaySessionsState;
+    }
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || parsed.dayKey !== dayKey) {
+      todaySessionsState = fallback;
+      persistTodaySessionsState();
+      return todaySessionsState;
+    }
+    todaySessionsState = {
+      dayKey,
+      dismissed: Boolean(parsed.dismissed),
+      emptyShown: Boolean(parsed.emptyShown),
+      pendingReshowStart: typeof parsed.pendingReshowStart === "string" ? parsed.pendingReshowStart : null,
+      reshowTriggeredStarts: Array.isArray(parsed.reshowTriggeredStarts)
+        ? parsed.reshowTriggeredStarts.filter(value => typeof value === "string")
+        : []
+    };
+    return todaySessionsState;
+  } catch (_error) {
+    todaySessionsState = fallback;
+    persistTodaySessionsState();
+    return todaySessionsState;
+  }
+}
+
+function formatTodaySessionsPanelDate(date = new Date()) {
+  return date.toLocaleDateString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
+
+function getTodaySessionStatus(startDate, endDate, now = new Date()) {
+  if (now < startDate) return "Upcoming";
+  if (now < endDate) return "In Progress";
+  return "Completed";
+}
+
+function getTodaySessionStatusClass(statusLabel) {
+  if (statusLabel === "In Progress") return "in-progress";
+  if (statusLabel === "Completed") return "completed";
+  return "upcoming";
+}
+
+function getClientInitials(fullName) {
+  const cleaned = (fullName || "").trim();
+  if (!cleaned) return "??";
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function getNextUpcomingStartIso(sessions, now = new Date(), excludeStarts = []) {
+  const excluded = new Set(excludeStarts);
+  const futureStarts = sessions
+    .map(session => session.start)
+    .filter(startIso => {
+      if (!startIso || excluded.has(startIso)) return false;
+      const startDate = new Date(startIso);
+      if (Number.isNaN(startDate.getTime())) return false;
+      return startDate > now;
+    })
+    .sort((a, b) => new Date(a) - new Date(b));
+  return futureStarts[0] || null;
+}
+
+function hideTodaySessionsPanel() {
+  document.getElementById("today-sessions-panel")?.classList.add("hidden");
+}
+
+function renderTodaySessionsPanel(sessions, { empty = false } = {}) {
+  const panel = document.getElementById("today-sessions-panel");
+  const dateEl = document.getElementById("today-sessions-panel-date");
+  const badgeEl = document.getElementById("today-sessions-panel-badge");
+  const emptyEl = document.getElementById("today-sessions-panel-empty");
+  const listEl = document.getElementById("today-sessions-panel-list");
+  const moreEl = document.getElementById("today-sessions-panel-more");
+  if (!panel || !dateEl || !badgeEl || !emptyEl || !listEl || !moreEl) return;
+
+  dateEl.textContent = formatTodaySessionsPanelDate(new Date());
+  listEl.innerHTML = "";
+
+  if (empty) {
+    badgeEl.classList.add("hidden");
+    emptyEl.classList.remove("hidden");
+    listEl.classList.add("hidden");
+    moreEl.classList.add("hidden");
+    panel.classList.remove("hidden");
+    return;
+  }
+
+  badgeEl.classList.remove("hidden");
+  emptyEl.classList.add("hidden");
+  listEl.classList.remove("hidden");
+
+  const now = new Date();
+  const withStatus = sessions.map(session => {
+    const startDate = new Date(session.start);
+    const endDate = new Date(session.end);
+    return {
+      ...session,
+      startDate,
+      endDate,
+      statusLabel: getTodaySessionStatus(startDate, endDate, now)
+    };
+  });
+
+  const upcomingCount = withStatus.filter(session => session.statusLabel === "Upcoming").length;
+  badgeEl.textContent = upcomingCount > 0 ? `${upcomingCount} upcoming` : `${withStatus.length} today`;
+
+  const visibleSessions = withStatus.slice(0, 3);
+  visibleSessions.forEach(session => {
+    const row = document.createElement("li");
+    row.className = "today-sessions-item";
+
+    const avatar = document.createElement("span");
+    avatar.className = "today-sessions-avatar";
+    avatar.textContent = getClientInitials(session.client_name);
+
+    const body = document.createElement("div");
+    body.className = "today-sessions-item-body";
+
+    const name = document.createElement("span");
+    name.className = "today-sessions-item-name";
+    name.textContent = session.client_name;
+
+    const time = document.createElement("span");
+    time.className = "today-sessions-item-time";
+    time.textContent = `${formatCalendarTime(session.startDate)} - ${formatCalendarTime(session.endDate)}`;
+
+    body.appendChild(name);
+    body.appendChild(time);
+
+    const status = document.createElement("span");
+    status.className = `today-sessions-item-status ${getTodaySessionStatusClass(session.statusLabel)}`;
+    status.textContent = session.statusLabel;
+
+    row.appendChild(avatar);
+    row.appendChild(body);
+    row.appendChild(status);
+    listEl.appendChild(row);
+  });
+
+  if (withStatus.length > 3) {
+    moreEl.classList.remove("hidden");
+    moreEl.textContent = `+${withStatus.length - 3} more today`;
+  } else {
+    moreEl.classList.add("hidden");
+    moreEl.textContent = "";
+  }
+
+  panel.classList.remove("hidden");
+}
+
+function dismissTodaySessionsPanel() {
+  const state = ensureTodaySessionsState();
+  const now = new Date();
+  state.dismissed = true;
+  state.pendingReshowStart = getNextUpcomingStartIso(todaySessionsData, now, state.reshowTriggeredStarts);
+  persistTodaySessionsState();
+  hideTodaySessionsPanel();
+}
+
+async function fetchTodaySessions() {
+  const res = await fetch("/api/calendar/today-sessions");
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(detail || "Failed to load today's sessions.");
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+function syncPendingReshowStart(sessions, now) {
+  const state = ensureTodaySessionsState();
+  if (!state.dismissed) return;
+  const upcomingStarts = sessions
+    .map(session => session.start)
+    .filter(startIso => {
+      const startDate = new Date(startIso);
+      return !Number.isNaN(startDate.getTime()) && startDate > now;
+    });
+  const hasPending = state.pendingReshowStart && upcomingStarts.includes(state.pendingReshowStart);
+  if (hasPending) return;
+  const nextStart = getNextUpcomingStartIso(sessions, now, state.reshowTriggeredStarts);
+  if (nextStart !== state.pendingReshowStart) {
+    state.pendingReshowStart = nextStart;
+    persistTodaySessionsState();
+  }
+}
+
+function shouldTriggerPendingReshow(now) {
+  const state = ensureTodaySessionsState();
+  if (!state.dismissed || !state.pendingReshowStart) return false;
+  if (state.reshowTriggeredStarts.includes(state.pendingReshowStart)) return false;
+  const startDate = new Date(state.pendingReshowStart);
+  if (Number.isNaN(startDate.getTime())) return false;
+  if (now >= startDate) return false;
+  const triggerDate = new Date(startDate.getTime() - (5 * 60 * 1000));
+  return now >= triggerDate;
+}
+
+async function refreshTodaySessionsPanel({ initial = false } = {}) {
+  const state = ensureTodaySessionsState();
+  const now = new Date();
+  let sessions = [];
+  try {
+    sessions = await fetchTodaySessions();
+  } catch (error) {
+    console.warn("Failed to refresh today's sessions panel:", error);
+    return;
+  }
+  todaySessionsData = sessions;
+
+  if (sessions.length === 0) {
+    state.pendingReshowStart = null;
+    if (initial && !state.emptyShown) {
+      state.emptyShown = true;
+      persistTodaySessionsState();
+      renderTodaySessionsPanel([], { empty: true });
+      return;
+    }
+    hideTodaySessionsPanel();
+    persistTodaySessionsState();
+    return;
+  }
+
+  state.emptyShown = true;
+  syncPendingReshowStart(sessions, now);
+
+  if (state.dismissed) {
+    if (shouldTriggerPendingReshow(now)) {
+      const triggeredStart = state.pendingReshowStart;
+      state.dismissed = false;
+      state.pendingReshowStart = null;
+      state.reshowTriggeredStarts = Array.from(new Set([...state.reshowTriggeredStarts, triggeredStart]));
+      persistTodaySessionsState();
+      renderTodaySessionsPanel(sessions, { empty: false });
+      return;
+    }
+    hideTodaySessionsPanel();
+    persistTodaySessionsState();
+    return;
+  }
+
+  persistTodaySessionsState();
+  renderTodaySessionsPanel(sessions, { empty: false });
+}
+
+function initializeTodaySessionsPanel() {
+  ensureTodaySessionsState();
+  document.getElementById("today-sessions-panel-dismiss")?.addEventListener("click", dismissTodaySessionsPanel);
+  refreshTodaySessionsPanel({ initial: true });
+  if (todaySessionsTimerId) {
+    clearInterval(todaySessionsTimerId);
+  }
+  todaySessionsTimerId = setInterval(() => {
+    refreshTodaySessionsPanel({ initial: false });
+  }, TODAY_SESSIONS_REFRESH_MS);
+}
+
 function getCalendarVisibleRange() {
   if (calendarView === "week") {
     const start = startOfWeek(calendarFocusDate);
@@ -1925,6 +2312,7 @@ async function submitAppointmentForm(event) {
   }
   closeAppointmentModal();
   refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  refreshTodaySessionsPanel({ initial: false });
 }
 
 function openOccurrenceModal(occurrence) {
@@ -1951,6 +2339,7 @@ async function cancelSelectedOccurrence() {
   }
   closeOccurrenceModal();
   refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  refreshTodaySessionsPanel({ initial: false });
 }
 
 function openMoveOccurrenceModal() {
@@ -1989,6 +2378,7 @@ async function submitMoveOccurrenceForm(event) {
   closeMoveOccurrenceModal();
   closeOccurrenceModal();
   refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  refreshTodaySessionsPanel({ initial: false });
 }
 
 function openDeleteScopeModal() {
@@ -2014,4 +2404,5 @@ async function deleteSelectedOccurrence(scope) {
   closeDeleteScopeModal();
   closeOccurrenceModal();
   refreshCalendar().catch(error => showError(error.message || "Failed to load calendar."));
+  refreshTodaySessionsPanel({ initial: false });
 }

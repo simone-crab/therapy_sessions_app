@@ -17,6 +17,7 @@ import enum
 class ClientStatus(enum.Enum):
     """Enumeration for the status of a client."""
     ACTIVE = "active"
+    WAITING_LIST = "waiting_list"
     ARCHIVED = "archived"
 
 class Client(BaseModel):
@@ -32,6 +33,8 @@ class Client(BaseModel):
         phone (Optional[str]): Client's phone number.
         date_of_birth (Optional[date]): Client's date of birth.
         initial_assessment_date (Optional[date]): Date of initial assessment.
+        session_hourly_rate (Optional[str]): Session/hourly rate specific to this client.
+        therapy_modality (Optional[str]): Preferred therapy modality for this client.
         address1 (Optional[str]): First line of client's address.
         address2 (Optional[str]): Second line of client's address.
         city (Optional[str]): City of client's address.
@@ -42,7 +45,7 @@ class Client(BaseModel):
         gp_name (Optional[str]): Name of client's GP.
         gp_practice (Optional[str]): Name of GP's practice.
         gp_phone (Optional[str]): Phone number of GP's practice.
-        status (ClientStatus): Current status of the client (e.g., active, archived).
+        status (ClientStatus): Current status of the client (e.g., active, waiting_list, archived).
         created_at (datetime): Timestamp of when the client record was created.
         updated_at (datetime): Timestamp of when the client record was last updated.
         session_notes (List[SessionNote]): Related session notes for this client.
@@ -57,6 +60,8 @@ class Client(BaseModel):
     phone = Column(String(50), nullable=True)
     date_of_birth = Column(Date, nullable=True)
     initial_assessment_date = Column(Date, nullable=True)
+    session_hourly_rate = Column(String(64), nullable=False, default="")
+    therapy_modality = Column(String(255), nullable=True)
     address1 = Column(String(255), nullable=True)
     address2 = Column(String(255), nullable=True)
     city = Column(String(100), nullable=True)

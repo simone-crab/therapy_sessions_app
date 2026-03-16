@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, case, extract
+from sqlalchemy import func, and_, case, extract, or_
 from backend.models.session_note import SessionNote
 from backend.models.assessment_note import AssessmentNote
 from backend.models.supervision_note import SupervisionNote
 from backend.models.cpd_note import CPDNote
-from backend.models.client import Client
+from backend.models.client import Client, ClientStatus
 from typing import List, Dict, Optional
 from datetime import date
 import logging
@@ -32,6 +32,29 @@ class ReportService:
         return plain
 
     @staticmethod
+    def _build_monthly_shell(start_date: date, end_date: date, include_hours: bool = True) -> List[Dict]:
+        months: List[Dict] = []
+        current = start_date.replace(day=1)
+        end_month = end_date.replace(day=1)
+
+        while current <= end_month:
+            month_data: Dict = {
+                "month_key": f"{current.year}-{current.month:02d}",
+                "month_name": current.strftime("%B %Y"),
+                "session_count": 0
+            }
+            if include_hours:
+                month_data["total_hours"] = 0.0
+            months.append(month_data)
+
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        return months
+
+    @staticmethod
     def get_client_time_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> List[Dict]:
         try:
             logger.info(f"Querying client time report from {start_date} to {end_date}, client_id={client_id}")
@@ -40,6 +63,8 @@ class ReportService:
             if client_id:
                 client = db.query(Client).filter(Client.id == client_id).first()
                 if not client:
+                    return []
+                if client.status == ClientStatus.WAITING_LIST:
                     return []
                 client_ids_to_process = [client_id]
             else:
@@ -81,6 +106,8 @@ class ReportService:
             
             if client_id:
                 session_query = session_query.filter(Client.id == client_id)
+            else:
+                session_query = session_query.filter(Client.status != ClientStatus.WAITING_LIST)
             
             session_results = session_query.group_by(Client.id).all()
             
@@ -95,6 +122,8 @@ class ReportService:
             
             if client_id:
                 assessment_query = assessment_query.filter(Client.id == client_id)
+            else:
+                assessment_query = assessment_query.filter(Client.status != ClientStatus.WAITING_LIST)
             
             assessment_results = assessment_query.group_by(Client.id).all()
             
@@ -180,6 +209,16 @@ class ReportService:
     def get_supervision_time_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> Dict:
         try:
             logger.info(f"Querying supervision time report from {start_date} to {end_date}, client_id={client_id}")
+
+            if client_id:
+                client = db.query(Client).filter(Client.id == client_id).first()
+                if not client or client.status == ClientStatus.WAITING_LIST:
+                    return {
+                        "total_sessions": 0,
+                        "total_hours": 0.0,
+                        "monthly_data": ReportService._build_monthly_shell(start_date, end_date, include_hours=True),
+                        "notes": []
+                    }
             
             # Build filter conditions
             filter_conditions = and_(
@@ -195,7 +234,17 @@ class ReportService:
                 extract('month', SupervisionNote.supervision_date).label('month'),
                 func.sum(SupervisionNote.duration_minutes).label('total_minutes'),
                 func.count(SupervisionNote.id).label('session_count')
-            ).filter(filter_conditions).group_by(
+            )
+            if client_id:
+                monthly_data = monthly_data.filter(filter_conditions)
+            else:
+                monthly_data = monthly_data.outerjoin(Client, SupervisionNote.client_id == Client.id).filter(
+                    and_(
+                        filter_conditions,
+                        or_(SupervisionNote.client_id.is_(None), Client.status != ClientStatus.WAITING_LIST)
+                    )
+                )
+            monthly_data = monthly_data.group_by(
                 extract('year', SupervisionNote.supervision_date),
                 extract('month', SupervisionNote.supervision_date)
             ).all()
@@ -249,7 +298,19 @@ class ReportService:
             if client_id:
                 supervision_filter = and_(supervision_filter, SupervisionNote.client_id == client_id)
             
-            supervision_notes = db.query(SupervisionNote).filter(supervision_filter).all()
+            supervision_notes_query = db.query(SupervisionNote)
+            if client_id:
+                supervision_notes_query = supervision_notes_query.filter(supervision_filter)
+            else:
+                supervision_notes_query = supervision_notes_query.outerjoin(
+                    Client, SupervisionNote.client_id == Client.id
+                ).filter(
+                    and_(
+                        supervision_filter,
+                        or_(SupervisionNote.client_id.is_(None), Client.status != ClientStatus.WAITING_LIST)
+                    )
+                )
+            supervision_notes = supervision_notes_query.all()
             
             total_minutes = sum(n.duration_minutes for n in supervision_notes)
             
@@ -278,6 +339,27 @@ class ReportService:
     def get_session_notes_report(db: Session, start_date: date, end_date: date, client_id: Optional[int] = None) -> Dict:
         try:
             logger.info(f"Querying session notes report from {start_date} to {end_date}, client_id={client_id}")
+
+            if client_id:
+                client = db.query(Client).filter(Client.id == client_id).first()
+                if not client or client.status == ClientStatus.WAITING_LIST:
+                    return {
+                        "total_sessions": 0,
+                        "total_hours": 0.0,
+                        "monthly_data": [
+                            {
+                                "month_key": m["month_key"],
+                                "month_name": m["month_name"],
+                                "session_hours": 0.0,
+                                "assessment_hours": 0.0,
+                                "total_hours": 0.0,
+                                "session_count": 0,
+                                "assessment_count": 0
+                            }
+                            for m in ReportService._build_monthly_shell(start_date, end_date, include_hours=True)
+                        ],
+                        "notes": []
+                    }
             
             # Build filter conditions
             session_filter = and_(
@@ -298,7 +380,14 @@ class ReportService:
                 extract('month', SessionNote.session_date).label('month'),
                 func.sum(SessionNote.duration_minutes).label('total_minutes'),
                 func.count(SessionNote.id).label('session_count')
-            ).filter(session_filter).group_by(
+            ).join(Client, SessionNote.client_id == Client.id)
+            if client_id:
+                session_monthly_data = session_monthly_data.filter(session_filter)
+            else:
+                session_monthly_data = session_monthly_data.filter(
+                    and_(session_filter, Client.status != ClientStatus.WAITING_LIST)
+                )
+            session_monthly_data = session_monthly_data.group_by(
                 extract('year', SessionNote.session_date),
                 extract('month', SessionNote.session_date)
             ).all()
@@ -309,7 +398,14 @@ class ReportService:
                 extract('month', AssessmentNote.assessment_date).label('month'),
                 func.sum(AssessmentNote.duration_minutes).label('total_minutes'),
                 func.count(AssessmentNote.id).label('session_count')
-            ).filter(assessment_filter).group_by(
+            ).join(Client, AssessmentNote.client_id == Client.id)
+            if client_id:
+                assessment_monthly_data = assessment_monthly_data.filter(assessment_filter)
+            else:
+                assessment_monthly_data = assessment_monthly_data.filter(
+                    and_(assessment_filter, Client.status != ClientStatus.WAITING_LIST)
+                )
+            assessment_monthly_data = assessment_monthly_data.group_by(
                 extract('year', AssessmentNote.assessment_date),
                 extract('month', AssessmentNote.assessment_date)
             ).all()
@@ -385,10 +481,24 @@ class ReportService:
                     current = current.replace(month=current.month + 1)
             
             # Get all session notes for the table with client information
-            session_notes = db.query(SessionNote, Client).join(Client, SessionNote.client_id == Client.id).filter(session_filter).all()
+            session_notes_query = db.query(SessionNote, Client).join(Client, SessionNote.client_id == Client.id)
+            if client_id:
+                session_notes_query = session_notes_query.filter(session_filter)
+            else:
+                session_notes_query = session_notes_query.filter(
+                    and_(session_filter, Client.status != ClientStatus.WAITING_LIST)
+                )
+            session_notes = session_notes_query.all()
             
             # Get all assessment notes for the table with client information
-            assessment_notes = db.query(AssessmentNote, Client).join(Client, AssessmentNote.client_id == Client.id).filter(assessment_filter).all()
+            assessment_notes_query = db.query(AssessmentNote, Client).join(Client, AssessmentNote.client_id == Client.id)
+            if client_id:
+                assessment_notes_query = assessment_notes_query.filter(assessment_filter)
+            else:
+                assessment_notes_query = assessment_notes_query.filter(
+                    and_(assessment_filter, Client.status != ClientStatus.WAITING_LIST)
+                )
+            assessment_notes = assessment_notes_query.all()
             
             # Combine and sort notes by date
             all_notes = []

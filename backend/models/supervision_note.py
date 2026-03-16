@@ -10,4 +10,5 @@ class SupervisionNote(BaseModel):
     content = Column(Text)
     personal_notes = Column(Text)
     summary = Column(String(100), nullable=False, default="")
+    supervisor_details = Column(String(255), nullable=False, default="")
     session_type = Column(String(20), nullable=False, default="Online")

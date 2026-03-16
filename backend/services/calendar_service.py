@@ -165,6 +165,35 @@ class CalendarService:
         return events
 
     @staticmethod
+    def get_today_sessions(db: Session, reference_time: Optional[datetime] = None) -> List[Dict]:
+        now = reference_time or datetime.now()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        events = CalendarService.get_events(db, day_start, day_end)
+        sessions = []
+
+        for event in events:
+            if event.get("status") == "CANCELLED":
+                continue
+
+            event_start = datetime.fromisoformat(event["start"])
+            event_end = datetime.fromisoformat(event["end"])
+            if now < event_start:
+                status = "UPCOMING"
+            elif now < event_end:
+                status = "IN_PROGRESS"
+            else:
+                status = "COMPLETED"
+
+            sessions.append({
+                **event,
+                "status": status,
+            })
+
+        sessions.sort(key=lambda item: item["start"])
+        return sessions
+
+    @staticmethod
     def create_appointment(db: Session, payload: AppointmentCreate) -> Appointment:
         CalendarService._validate_time_range(payload.start_datetime, payload.end_datetime)
         client = CalendarService._validate_client_active(db, payload.client_id)

@@ -104,6 +104,13 @@ def get_totals(filter: str = "active", db: Session = Depends(get_db)):
             session_count_query = session_count_query.join(Client).filter(Client.status == ClientStatus.ACTIVE)
             assessment_count_query = assessment_count_query.join(Client).filter(Client.status == ClientStatus.ACTIVE)
             supervision_count_query = supervision_count_query.join(Client).filter(Client.status == ClientStatus.ACTIVE)
+        elif filter == "waiting_list":
+            session_time_query = session_time_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
+            assessment_time_query = assessment_time_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
+            supervision_time_query = supervision_time_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
+            session_count_query = session_count_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
+            assessment_count_query = assessment_count_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
+            supervision_count_query = supervision_count_query.join(Client).filter(Client.status == ClientStatus.WAITING_LIST)
         elif filter == "archived":
             session_time_query = session_time_query.join(Client).filter(Client.status == ClientStatus.ARCHIVED)
             assessment_time_query = assessment_time_query.join(Client).filter(Client.status == ClientStatus.ARCHIVED)

@@ -20,3 +20,5 @@ class TherapistDetail(BaseModel):
     currency = Column(String(16), nullable=False, default="GBP")
     sort_code = Column(String(64), nullable=False)
     account_number = Column(String(64), nullable=False)
+    iban = Column(String(128), nullable=False, default="")
+    bic = Column(String(128), nullable=False, default="")

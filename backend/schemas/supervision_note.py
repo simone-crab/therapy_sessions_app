@@ -8,6 +8,7 @@ class SupervisionNoteBase(BaseModel):
     content: Optional[str] = None
     personal_notes: Optional[str] = None
     summary: str = Field(default="", max_length=100)
+    supervisor_details: str = Field(default="", max_length=255)
     duration_minutes: Optional[int] = None
     session_type: str = "Online"
 
@@ -27,6 +28,7 @@ class SupervisionNoteUpdate(BaseModel):
     content: Optional[str] = None
     personal_notes: Optional[str] = None
     summary: Optional[str] = Field(default=None, max_length=100)
+    supervisor_details: Optional[str] = Field(default=None, max_length=255)
     duration_minutes: Optional[int] = None
     client_id: Optional[int] = None
     session_type: Optional[str] = None

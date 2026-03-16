@@ -29,6 +29,7 @@ class ClientService:
             db: The database session.
             filter: A string indicating how to filter clients.
                 "active" (default): Returns only active clients.
+                "waiting_list": Returns only waiting list clients.
                 "archived": Returns only archived clients.
                 "all": Returns all clients.
 
@@ -38,6 +39,8 @@ class ClientService:
         query = db.query(Client)
         if filter == "active":
             query = query.filter(Client.status == ClientStatus.ACTIVE)
+        elif filter == "waiting_list":
+            query = query.filter(Client.status == ClientStatus.WAITING_LIST)
         elif filter == "archived":
             query = query.filter(Client.status == ClientStatus.ARCHIVED)
         # if filter == "all", do not apply any filter
@@ -78,6 +81,9 @@ class ClientService:
             client_code = client.client_code.strip() if client.client_code else None
             if not client_code:
                 raise ValueError("Client code is required.")
+            session_hourly_rate = client.session_hourly_rate.strip() if client.session_hourly_rate else ""
+            if not session_hourly_rate:
+                raise ValueError("Session/Hourly Rate is required.")
 
             existing_client = db.query(Client).filter(Client.client_code == client_code).first()
             if existing_client:
@@ -91,6 +97,8 @@ class ClientService:
                 phone=client.phone,
                 date_of_birth=client.date_of_birth,
                 initial_assessment_date=client.initial_assessment_date,
+                session_hourly_rate=session_hourly_rate,
+                therapy_modality=(client.therapy_modality.strip() if client.therapy_modality else None),
                 address1=client.address1,
                 address2=client.address2,
                 city=client.city,
@@ -101,7 +109,7 @@ class ClientService:
                 gp_name=client.gp_name,
                 gp_practice=client.gp_practice,
                 gp_phone=client.gp_phone,
-                status=ClientStatus.ACTIVE
+                status=client.status or ClientStatus.ACTIVE
             )
             db.add(db_client)
             db.commit()
@@ -148,6 +156,15 @@ class ClientService:
                         )
                         if existing_client:
                             raise ValueError("Client code already exists.")
+                if "session_hourly_rate" in update_dict:
+                    session_hourly_rate = update_dict["session_hourly_rate"]
+                    session_hourly_rate = session_hourly_rate.strip() if session_hourly_rate is not None else ""
+                    if not session_hourly_rate:
+                        raise ValueError("Session/Hourly Rate is required.")
+                    update_dict["session_hourly_rate"] = session_hourly_rate
+                if "therapy_modality" in update_dict:
+                    therapy_modality = update_dict["therapy_modality"]
+                    update_dict["therapy_modality"] = therapy_modality.strip() if therapy_modality else None
                 for field, value in update_dict.items():
                     if field != 'id':
                         setattr(db_client, field, value)
