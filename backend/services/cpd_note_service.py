@@ -7,7 +7,7 @@ class CPDNoteService:
 
     @staticmethod
     def get_all_cpd_notes(db: Session) -> List[CPDNote]:
-        return db.query(CPDNote).order_by(CPDNote.cpd_date.asc()).all()
+        return db.query(CPDNote).order_by(CPDNote.cpd_date.desc(), CPDNote.id.desc()).all()
 
     @staticmethod
     def create_cpd_note(db: Session, note: CPDNoteCreate) -> CPDNote:
@@ -37,4 +37,3 @@ class CPDNoteService:
             db.commit()
             return True
         return False
-

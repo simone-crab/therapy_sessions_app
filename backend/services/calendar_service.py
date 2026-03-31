@@ -10,7 +10,6 @@ from backend.schemas.calendar import AppointmentCreate, AppointmentUpdate, Occur
 
 
 class CalendarService:
-    ACTIVE_APPOINTMENT_ERROR = "This client already has an active booked slot. Edit the existing appointment instead."
     ALLOWED_EXCEPTION_ACTIONS = {"CANCELLED", "MOVED"}
 
     @staticmethod
@@ -23,15 +22,35 @@ class CalendarService:
         return client
 
     @staticmethod
-    def _ensure_client_has_no_other_active_appointment(db: Session, client_id: int, excluding_appointment_id: Optional[int] = None):
-        query = db.query(Appointment).filter(
-            Appointment.client_id == client_id,
-            Appointment.is_active.is_(True),
-        )
-        if excluding_appointment_id is not None:
-            query = query.filter(Appointment.id != excluding_appointment_id)
-        if query.first():
-            raise ValueError(CalendarService.ACTIVE_APPOINTMENT_ERROR)
+    def _deactivate_stale_appointments(db: Session, client_id: Optional[int] = None, reference_time: Optional[datetime] = None):
+        now = reference_time or datetime.now()
+        query = db.query(Appointment).filter(Appointment.is_active.is_(True))
+        if client_id is not None:
+            query = query.filter(Appointment.client_id == client_id)
+
+        stale_updated = False
+        for appointment in query.all():
+            base_duration = appointment.end_datetime - appointment.start_datetime
+            cancelled_single_appointment = (
+                not appointment.recurrence_rule and
+                any(
+                    exc.action == "CANCELLED" and exc.occurrence_start_datetime == appointment.start_datetime
+                    for exc in appointment.exceptions
+                )
+            )
+            if not appointment.recurrence_rule:
+                is_stale = appointment.end_datetime < now
+            elif appointment.recurrence_until is not None:
+                is_stale = appointment.recurrence_until + base_duration < now
+            else:
+                is_stale = False
+
+            if is_stale or cancelled_single_appointment:
+                appointment.is_active = False
+                stale_updated = True
+
+        if stale_updated:
+            db.flush()
 
     @staticmethod
     def _validate_time_range(start_datetime: datetime, end_datetime: datetime):
@@ -142,6 +161,7 @@ class CalendarService:
 
     @staticmethod
     def get_events(db: Session, range_start: datetime, range_end: datetime) -> List[Dict]:
+        CalendarService._deactivate_stale_appointments(db)
         appointments = db.query(Appointment).filter(Appointment.is_active.is_(True)).all()
         events = []
 
@@ -197,7 +217,6 @@ class CalendarService:
     def create_appointment(db: Session, payload: AppointmentCreate) -> Appointment:
         CalendarService._validate_time_range(payload.start_datetime, payload.end_datetime)
         client = CalendarService._validate_client_active(db, payload.client_id)
-        CalendarService._ensure_client_has_no_other_active_appointment(db, payload.client_id)
 
         recurrence_rule = payload.recurrence_rule
         if recurrence_rule == "WEEKLY":
@@ -227,7 +246,6 @@ class CalendarService:
         start_datetime = payload.start_datetime or appointment.start_datetime
         end_datetime = payload.end_datetime or appointment.end_datetime
         CalendarService._validate_time_range(start_datetime, end_datetime)
-        CalendarService._ensure_client_has_no_other_active_appointment(db, appointment.client_id, excluding_appointment_id=appointment.id)
 
         update_data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
         if update_data.get("recurrence_rule") == "WEEKLY":
@@ -245,6 +263,12 @@ class CalendarService:
         appointment = db.query(Appointment).filter(Appointment.id == appointment_id, Appointment.is_active.is_(True)).first()
         if not appointment:
             raise ValueError("Appointment not found.")
+
+        if not appointment.recurrence_rule:
+            appointment.is_active = False
+            db.commit()
+            db.refresh(appointment)
+            return appointment
 
         exception = db.query(AppointmentException).filter(
             AppointmentException.appointment_id == appointment_id,

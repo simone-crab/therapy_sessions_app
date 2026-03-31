@@ -27,6 +27,9 @@
     applyThemeToDOM(theme) {
       const normalized = normalizeTheme(theme);
       document.documentElement.dataset.theme = normalized;
+      document.dispatchEvent(new CustomEvent("solu-theme-changed", {
+        detail: { theme: normalized }
+      }));
       return normalized;
     },
 
@@ -59,4 +62,3 @@
 
   window.ThemeManager = ThemeManager;
 })();
-

@@ -232,7 +232,7 @@ function validateSQLiteBuffer(buffer) {
 
 function buildBackupDefaultName() {
   const isoDate = new Date().toISOString().slice(0, 10);
-  return `SOLU NOTES Backup ${isoDate}.${BACKUP_FILE_EXTENSION}`;
+  return `Solu Notes Backup ${isoDate}.${BACKUP_FILE_EXTENSION}`;
 }
 
 function createErrorWindow(errorMessage) {
@@ -249,10 +249,10 @@ function createErrorWindow(errorMessage) {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Error - SOLU NOTES</title>
+      <title>Error - Solu Notes</title>
       <style>
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
           padding: 40px;
           background: #f5f5f5;
         }
@@ -304,7 +304,7 @@ function createLoadingScreen() {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>SOLU NOTES</title>
+      <title>Solu Notes</title>
       <style>
         * {
           margin: 0;
@@ -312,7 +312,7 @@ function createLoadingScreen() {
           box-sizing: border-box;
         }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -355,7 +355,7 @@ function createLoadingScreen() {
     <body>
       <div class="spinner-container">
         <div class="spinner"></div>
-        <h1>SOLU NOTES</h1>
+        <h1>Solu Notes</h1>
         <p>Starting application...</p>
       </div>
     </body>
@@ -411,7 +411,7 @@ async function showPasswordPrompt({ title, message, actionLabel, confirmPassword
         <title>${title}</title>
         <style>
           body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
             margin: 0;
             padding: 24px;
             background: #2f2f33;
@@ -562,7 +562,7 @@ async function createEncryptedBackup() {
     let { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Create Encrypted Backup',
       defaultPath: path.join(app.getPath('documents'), buildBackupDefaultName()),
-      filters: [{ name: 'SOLU NOTES Backup', extensions: [BACKUP_FILE_EXTENSION] }]
+      filters: [{ name: 'Solu Notes Backup', extensions: [BACKUP_FILE_EXTENSION] }]
     });
     if (canceled || !filePath) return;
     if (path.extname(filePath).toLowerCase() !== `.${BACKUP_FILE_EXTENSION}`) {
@@ -605,14 +605,14 @@ async function restoreEncryptedBackup() {
       defaultId: 1,
       cancelId: 0,
       message: 'Restore from encrypted backup?',
-      detail: 'This will replace the current local database and restart SOLU NOTES.'
+      detail: 'This will replace the current local database and restart Solu Notes.'
     });
     if (warning.response !== 1) return;
 
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: 'Restore From Encrypted Backup',
       properties: ['openFile'],
-      filters: [{ name: 'SOLU NOTES Backup', extensions: [BACKUP_FILE_EXTENSION] }]
+      filters: [{ name: 'Solu Notes Backup', extensions: [BACKUP_FILE_EXTENSION] }]
     });
     if (canceled || !filePaths?.length) return;
 
@@ -651,7 +651,7 @@ async function restoreEncryptedBackup() {
     await dialog.showMessageBox(mainWindow, {
       type: 'info',
       message: 'Backup restored successfully.',
-      detail: 'SOLU NOTES will now restart.'
+      detail: 'Solu Notes will now restart.'
     });
 
     app.relaunch();
@@ -700,6 +700,18 @@ function setupApplicationMenu() {
       submenu: [
         { label: 'Create Encrypted Backup...', click: () => createEncryptedBackup() },
         { label: 'Restore From Encrypted Backup...', click: () => restoreEncryptedBackup() },
+        { type: 'separator' },
+        {
+          label: 'View Reports...',
+          click: () => {
+            if (!mainWindow || mainWindow.isDestroyed()) {
+              return;
+            }
+            mainWindow.loadURL(`${getBackendUrl()}/reports`).catch(error => {
+              console.error('[menu] Failed to open reports page:', error);
+            });
+          }
+        },
         { type: 'separator' },
         {
           label: 'Therapist Details...',
@@ -787,7 +799,7 @@ function createWindow() {
     x: workArea.x + Math.round((workArea.width - windowWidth) / 2),
     y: workArea.y,
     show: true, // Show immediately
-    title: 'SOLU NOTES',
+    title: 'Solu Notes',
     webPreferences: {
       contextIsolation: true,
       spellcheck: true, // Enable spell checking
@@ -1057,7 +1069,7 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
-  app.setName('SOLU NOTES');
+  app.setName('Solu Notes');
   currentTheme = loadPersistedTheme();
   setupApplicationMenu();
   // Prevent multiple backend startups

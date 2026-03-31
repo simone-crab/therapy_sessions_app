@@ -2,7 +2,7 @@
   "name": "solu-notes",
   "version": "1.0.2",
   "main": "main.js",
-  "description": "SOLU NOTES",
+  "description": "Solu Notes",
   "author": "Simone C.",
   "license": "MIT",
   "scripts": {
@@ -15,7 +15,7 @@
   },
   "build": {
     "appId": "com.simone.therapysessionmanager",
-    "productName": "SOLU NOTES",
+    "productName": "Solu Notes",
     "mac": {
       "target": "dmg",
       "category": "public.app-category.medical",

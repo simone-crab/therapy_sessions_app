@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from backend.models.base import Base
@@ -34,6 +35,7 @@ def create_tables():
     _ensure_client_columns()
     _ensure_personal_notes_columns()
     _ensure_appointment_indexes()
+    _deactivate_stale_appointments()
     _ensure_therapist_details_columns()
     _ensure_invoice_indexes()
 
@@ -81,10 +83,42 @@ def _ensure_personal_notes_columns():
 
 def _ensure_appointment_indexes():
     with engine.begin() as conn:
+        conn.execute(text("DROP INDEX IF EXISTS idx_appointments_active_client"))
         conn.execute(text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_active_client "
-            "ON appointments(client_id) WHERE is_active = 1"
+            "CREATE INDEX IF NOT EXISTS idx_appointments_client_active "
+            "ON appointments(client_id, is_active)"
         ))
+
+def _deactivate_stale_appointments():
+    now = datetime.now()
+    db = SessionLocal()
+    try:
+        stale_updated = False
+        active_appointments = db.query(Appointment).filter(Appointment.is_active.is_(True)).all()
+        for appointment in active_appointments:
+            base_duration = appointment.end_datetime - appointment.start_datetime
+            cancelled_single_appointment = (
+                not appointment.recurrence_rule and
+                any(
+                    exc.action == "CANCELLED" and exc.occurrence_start_datetime == appointment.start_datetime
+                    for exc in appointment.exceptions
+                )
+            )
+            if not appointment.recurrence_rule:
+                is_stale = appointment.end_datetime < now
+            elif appointment.recurrence_until is not None:
+                is_stale = appointment.recurrence_until + base_duration < now
+            else:
+                is_stale = False
+
+            if is_stale or cancelled_single_appointment:
+                appointment.is_active = False
+                stale_updated = True
+
+        if stale_updated:
+            db.commit()
+    finally:
+        db.close()
 
 def _ensure_therapist_details_columns():
     inspector = inspect(engine)
